@@ -480,7 +480,9 @@ zeros = np.zeros
 # # # # # # # # # # # # # # # # # # # # # # 
 # MAIN
 
-print
-print G.vals(HR)
+if __name__=='__main__':
+    print
+    print G.vals(HR)
 
-nx.draw(G);show()
+    nx.draw(G);show()
+

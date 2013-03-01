@@ -8,6 +8,7 @@ import numpy.random as sample
 import scipy.stats as pdf
 import networkx as nx
 import itertools
+from copy import deepcopy
 
 from factor_graph import *
 
@@ -58,18 +59,18 @@ def make_messengers(G):
         for v in G.N(f):
             Nu[v,f] = array([1 for _ in G.vals(v)])
 
-    normalize_messenger(G, Mu)
-    normalize_messenger(G, Nu)
+    normalize_messenger(Mu)
+    normalize_messenger(Nu)
 
     return Mu, Nu
 
 
-def normalize_messenger(G, M):
-    for x in M: M[x] = pd(M[x])
+def normalize_messenger(X):
+    for x in X: X[x] = pd(X[x])
 
 
 
-def fac2var(Mu,Nu, G, f,v):
+def fac2var(_Mu,Nu, G, f,v):
     """
     eg
     VAR has { val ... }
@@ -110,7 +111,7 @@ def fac2var(Mu,Nu, G, f,v):
         msg = sum(  G(f, *_vals)  *  product([ Nu[_v, f][_vals[ii[_v]]]  for _v in G.N(f)  if _v != v  ])
                     for _vals in space )
 
-        Mu[f,v][val] = msg
+        _Mu[f,v][val] = msg
     
     """
 
@@ -139,7 +140,7 @@ def fac2var(Mu,Nu, G, f,v):
     #print 'Mu =', Mu
 
 
-def var2fac(Mu,Nu, G, v,f):
+def var2fac(Mu,_Nu, G, v,f):
     #print
     print "var '%s' \t=>\t fac '%s'" % (v,f)
     assert G.type(v)=='var' and G.type(f)=='fac'
@@ -152,17 +153,17 @@ def var2fac(Mu,Nu, G, v,f):
     msg = [ product([ Mu[_f, v][val]  for _f in G.N(v)  if _f != f ])
             for val in G.vals(v) ]
     
-    Nu[v,f] = msg
+    _Nu[v,f] = msg
 
     #print 
     #print 'Nu =', Nu
 
 
-def msg(Mu,Nu,G, x,y):
+def msg(M,N,G, x,y):
     if G.type(x)=='var':
-        var2fac(Mu,Nu,G, x,y)
+        var2fac(M,N, G, x,y)
     else:
-        fac2var(Mu,Nu,G, x,y)
+        fac2var(M,N, G, x,y)
 
 
 
@@ -170,22 +171,37 @@ def marginal(Mu, G, v):
     # forall f in G.N(v),  p = Nu[v,f] * Mu[f,v]
     return pd([ product([ Mu[f,v][val] for f in G.N(v) ])  for val in G.vals(v) ])
 
+def marginals(Mu,G):
+    return { v : marginal(Mu,G, v) for v in G.vars() }
 
-def sumprod(G, Mu=None, Nu=None):
+
+def sumprod_tree(G, Mu=None, Nu=None):
+    if not Mu or not Nu:
+        Mu, Nu = make_messengers(G)
+
+    
+
+def marginalize_sumprod(G, M=1, N=500, P=2, eps=1e-6):
     """
-    : factor graph => marginals
-
-    G = factor graph
+    : any factor graph => marginals
+    : iterative algorithm
+     exact and fast on factor trees
+     approximate and slow on cyclic factor graphs
 
     factor graph
     randvars : discrete
     message update schedule : parallel
 
-    (message passing protocol)
+    [message passing protocol]
     distribute message to some neighbor node
     <->
     have collected message from every other neighbor node
 
+    [message passing protocol]
+    : parallel
+    each iteration, collect from i-1 => distribute to i
+
+    [iteration]
     set next factor-to-variable msgs  from curr variable-to-factor msgs
     =>
     update variable-to-factor msgs  given factor-to-variable msgs
@@ -196,32 +212,63 @@ def sumprod(G, Mu=None, Nu=None):
     factor graph : tree  <->  factor graph as undirected graph : tree
     -> sumprod on factgraphs iterates approximately (not recurs exactly)
     
-    
-    """
-    if not Mu or not Nu:
-        Mu, Nu = make_messengers(G)
 
-        
-
-    return Mu, Nu
-    
-
-def marginalize_sumprod(G, xs=None, tree=True):
-    """
-    G : any factor graph
-
-    exact and fast on factor trees
-    approximate and iterative on cyclic factor graphs
 
     xs = x        ->  marginalize for this var    => [m]
     xs = [x,y..]  ->  marginalize for these vars  => [m..]
     xs = None     ->  marginalize for each var    => [m..]
 
     """
+    
+    # "_X" set/write to next/new
+    # "X" get/read from curr/old
+    _Mu, _Nu = make_messengers(G)
+    Mu, Nu = deepcopy(_Mu), deepcopy(_Nu)
 
-    if tree:
-        return sumprod(G)
+    i = 0
+    _diff, diff = +inf, 0
+    stuck = 0
+    while True:
+        if not i < N:
+            alert('sumprod: iterated too many times (N=%d)' % N)
+            break
 
+        if M < i:
+            if abs(_diff - diff) < eps and stuck > 1: #HACK diff hits zero every other dunno why
+                print 'sumprod: converged (eps=%.0e)' % eps
+                break
+
+            if stuck > P:
+                print 'sumprod: got stuck %d times at %.9f' % (P, diff)
+                break
+
+        i += 1; print; print i
+
+        for v in G.vars():
+            for f in G.N(v):
+                msg(Mu,_Nu,G, v,f)
+
+        for f in G.facs():
+            for v in G.N(f):
+                msg(_Mu,Nu,G, f,v)
+
+        normalize_messenger(_Mu)
+        normalize_messenger(_Nu)
+        
+        # var('Mu',Mu)
+        # var('_Mu',_Mu)
+        _diff = max( max( max(abs(_Mu[fv] - Mu[fv])) for fv in Mu ),
+                     max( max(abs(_Nu[vf] - Nu[vf])) for vf in Nu ))
+        
+        var('diff', '%.12f' % abs(_diff - diff))
+
+        stuck = 1+stuck if abs(_diff - diff) < eps else 0
+
+        diff   = _diff
+        Mu, Nu = deepcopy(_Mu), deepcopy(_Nu)
+
+    return marginals(Mu,G)
+    
     
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
@@ -270,34 +317,56 @@ def marginalize_bruteforce(G, xs=None):
 # C
 
 
-def test(G):
+def test(G, **kwargs):
 
-    Mu,Nu = make_messengers(G)
-    
-    print
-    print 'G =', G.node
+    var('G', G.node)
 
-    bf = marginalize_bruteforce(G)    
-    print
-    print 'bf =', bf
+    bf = marginalize_bruteforce(G)
+    sp = marginalize_sumprod(G, **kwargs)
 
-    sp = marginalize_sumprod(G)
-    print
-    print 'sp =', sp
+    var('bf', bf)
+    var('sp', sp)
 
     compare(sp,bf)
 
 
 def compare(ps,qs):
+    print
     for var,p,q in zip( ps, ps.values(), qs.values() ):
         assert all([near(pi,qi) for pi,qi in zip(p,q)])
 
 
+def div(s):
+    un = "\033[0;0m" 
+    bold = "\033[1m"
+    blue = '\033[94m'
+
+    print;print
+    print bold+blue + ('--- %s ---' % s) + un
+
+def var(name, val, new=True):
+    un = "\033[0;0m" 
+    bold = "\033[1m"
+    green = '\033[92m'
+
+    assert type(name)==str
+    
+    if new: print
+    print bold+green+ name +un + (' = %s' % str(val))
+
+def alert(msg, t=0):
+    import time
+
+    un = "\033[0;0m" 
+    bold = "\033[1m"
+    red = '\033[91m'
+
+    print bold+red+ msg +un
+    time.sleep(t)
+
 if __name__=='__main__':
 
-    print
-    print
-    print '--- testing bruteforce marginalize ---'
+    div('testing bruteforce marginalize')
 
     print
     print
@@ -337,9 +406,7 @@ if __name__=='__main__':
     assert near( pC[0,0,0,0] , C('f[abcd]', 0,0,0,0) * (1/Z))
     assert near( pC[0,1,2,3] , C('f[abcd]', 0,1,2,3) * (1/Z))
 
-    print
-    print
-    print '--- testing sumprod marginalize ---'
+    div('testing sumprod marginalize')
 
 
 
@@ -359,12 +426,10 @@ if __name__=='__main__':
     m('v','f3')
 
     sp = {v:marginal(Mu,G, v) for v in G.vars()}
-    print
-    print 'sp =', sp
+    var('sp', sp)
 
     bf = marginalize_bruteforce(G)    
-    print
-    print 'bf =', bf
+    var('bf', bf)
 
     compare(sp,bf)
 
@@ -386,12 +451,10 @@ if __name__=='__main__':
     m('f','c')
 
     sp = {v:marginal(Mu,G, v) for v in G.vars()}
-    print
-    print 'sp =', sp
+    var('sp', sp)
 
     bf = marginalize_bruteforce(G)    
-    print
-    print 'bf =', bf
+    var('bf', bf)
 
     compare(sp,bf)
 
@@ -413,12 +476,10 @@ if __name__=='__main__':
     m('a', 'f[a]')
 
     sp = {v:marginal(Mu,G, v) for v in G.vars()}
-    print
-    print 'sp =', sp
+    var('sp', sp)
 
     bf = marginalize_bruteforce(G)    
-    print
-    print 'bf =', bf
+    var('bf' , bf)
 
     compare(sp,bf)
     
@@ -446,12 +507,10 @@ if __name__=='__main__':
     m('f[ab]','a')
 
     sp = {v:marginal(Mu,G, v) for v in G.vars()}
-    print
-    print 'sp =', sp
+    var('sp', sp)
 
     bf = marginalize_bruteforce(G)    
-    print
-    print 'bf =', bf
+    var('bf', bf)
 
     compare(sp,bf)
 
@@ -492,15 +551,37 @@ if __name__=='__main__':
     m('d','f[d]')
     
     sp = {v:marginal(Mu,G, v) for v in G.vars()}
-    print
-    print 'sp =', sp
+    var('sp', sp)
 
     bf = marginalize_bruteforce(G)    
-    print
-    print 'bf =', bf
+    var('bf', bf)
 
     compare(sp,bf)
 
+
+
+    div('testing general iterative sumprod')
+
+    print;print;print 'testing...'
+    G = factor_1f3v()
+    test(G)
+    
+    print;print; alert('testing...')
+    G = factor_3f1v()
+    test(G)
+
+    print;print; alert('testing list...')
+    G = factor_list()
+    test(G)
+
+    print;print; alert('testing tree...')
+    G = factor_tree()
+    test(G)
+    
+    print;print; alert('testing square graph with a cycle...', t=0)
+    G = factor_square()
+    test(G)
+    
 
 
 

@@ -45,12 +45,22 @@ class FactorGraph(nx.Graph):
         
         """
         super(FactorGraph, self).__init__(data=data, **attr)
-
+        
         self.graph['n_vars'] = 0 # number of variables
         self.graph['n_facs'] = 0 # number of factors
         self.graph['vars'] = [] # in deterministic order
         self.graph['facs'] = [] # in deterministic order
         
+    def subgraph(self, vars, facs):
+        self.graph['n_vars'] = len(vars)
+        self.graph['n_facs'] = len(facs)
+        self.graph['vars'] = vars
+        self.graph['facs'] = facs
+
+        # must condition or marginalize complement
+        
+
+        return super(FactorGraph, self).subgraph(vars+facs)
 
     def new(self, name):
         n = { 'x': self.graph['n_vars'],
@@ -311,16 +321,34 @@ def factor_1f3v():
     return G
     
 
+def factor_square():
+    G = FactorGraph()
 
-T = factor_tree()
+    a,b,c,d = 'a','b','c','d'
+    G.add_var(a, d=2)
+    G.add_var(b, d=3)
+    G.add_var(c, d=4)
+    G.add_var(d, d=5)
+    
+    ab = pd(magic((2,3)))
+    bc = pd(magic((3,4)))
+    cd = pd(magic((4,5)))
+    da = pd(magic((5,2)))
+    G.add_fac(ab, [a,b], name='f[ab]')
+    G.add_fac(bc, [b,c], name='f[bc]')
+    G.add_fac(cd, [c,d], name='f[cd]')
+    G.add_fac(da, [d,a], name='f[da]')
 
-L = factor_list()
+    return G
 
-C = factor_clique()
 
-#S = factor_star()
-
-#print 'T =', T.node
 if __name__=='__main__':
-    nx.draw(T)
+
+    # T = factor_tree()
+    # L = factor_list()
+    # C = factor_clique()
+    # S = factor_square()
+
+    nx.draw(factor_square())
+
     show()
