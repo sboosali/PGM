@@ -1,7 +1,5 @@
 #!/usr/bin/python
 from __future__ import division
-from sam.sam import *
-from sam import sam
 
 from numpy import *
 from matplotlib.pyplot import *
@@ -9,7 +7,10 @@ import nltk
 import numpy.random as sample
 import scipy.stats as pdf
 import networkx as nx
+from copy import deepcopy
 
+from sam.sam import *
+from sam import sam
 
 """
 init factor graph => add vars => add facs
@@ -46,25 +47,96 @@ class FactorGraph(nx.Graph):
         """
         super(FactorGraph, self).__init__(data=data, **attr)
         
-        self.graph['n_vars'] = 0 # number of variables
-        self.graph['n_facs'] = 0 # number of factors
         self.graph['vars'] = [] # in deterministic order
         self.graph['facs'] = [] # in deterministic order
         
-    def subgraph(self, vars, facs):
-        self.graph['n_vars'] = len(vars)
-        self.graph['n_facs'] = len(facs)
-        self.graph['vars'] = vars
-        self.graph['facs'] = facs
 
-        # must condition or marginalize complement
+    def subgraph(self, vars, condition={}):
+        """
+        must condition or marginalize complement
+
         
+        """
 
-        return super(FactorGraph, self).subgraph(vars+facs)
+        H = deepcopy(self)
+
+        facs = list(set(flatten([H.N(v) for v in vars])))
+
+        complement = set([v  for v in H.vars()  if v not in set(vars)])
+        if condition:
+            assert set(condition) <= set(complement)
+            for v in condition:
+                assert condition[v] < self.node[v]['d']
+        complement = set(complement) - set(condition)
+         
+        # condition by slicing factor
+        H.condition(**condition)
+
+        # marginalize by elimination
+        H.eliminate(*complement)
+
+        return H
+
+
+    def eliminate(self, *vs):
+        """
+        vs : [var]
+
+        """
+
+        for v in vs:
+            for f in self.N(v):
+                fac = self.node[f]
+
+                i = fac['vars'].index(v)
+                fac['vars'].remove(v)
+
+                if len(fac['pmf'].shape) > 1:
+                    # sum pmf
+                    # eg sum at i=1. shape(2,3,4) => shape(2,4)
+                    fac['pmf'] = sum( fac['pmf'], axis=i )
+
+                else:
+                    # no other var needs this fac
+                    self.remove_node(f)
+                    self.graph['facs'].remove(f)
+
+            self.remove_node(v)
+            self.graph['vars'].remove(v)
+
+
+    def condition(self, **vxs):
+        """
+        vxs : {var: val, ...}
+
+        """
+        
+        for v,x in vxs.items():
+            
+            for f in self.N(v):
+                fac = self.node[f]
+
+                i = fac['vars'].index(v)
+                fac['vars'].remove(v)
+
+                if len(fac['pmf'].shape) > 1:
+                    # slice pmf
+                    # eg rollaxis. i=1  shape(2,3,4) => shape(3,2,4)
+                    # eg slice.    x=_  shape(3,2,4) => shape(2,4)
+                    fac['pmf'] = rollaxis( fac['pmf'], i,0 )[x,:]
+
+                else:
+                    # no other var needs this fac
+                    self.remove_node(f)
+                    self.graph['facs'].remove(f)
+
+            self.remove_node(v)
+            self.graph['vars'].remove(v)
+
 
     def new(self, name):
-        n = { 'x': self.graph['n_vars'],
-              'f': self.graph['n_facs'],
+        n = { 'x': len(self.vars()),
+              'f': len(self.facs()),
               }[name]
         
         name = '%s%d' % (name, n)
@@ -101,7 +173,6 @@ class FactorGraph(nx.Graph):
         if name is None:
             name = self.new('x')
     
-        self.graph['n_vars'] += 1
         self.add_node( name, d=d, type='var' )
         self.graph['vars'].append( name )
     
@@ -118,19 +189,18 @@ class FactorGraph(nx.Graph):
     
         
         """
+        p = pd(p)
         
         if name is None or name in self:
             name = self.new('f')
     
         p = array(p)
     
-        self.graph['n_facs'] += 1
-        self.add_node( name, p=p, vars=[], type='fac' )
+        self.add_node( name, pmf=p, vars=vars, type='fac' ) # 'vars' for order
         self.graph['facs'].append( name )
         
         for x in vars:
             self.add_edge( name, x )
-            self.node[name]['vars'].append(x) # for order
     
     
     def N(self, x):
@@ -160,7 +230,7 @@ class FactorGraph(nx.Graph):
 
     def __call__(self, fac, *vals):
         #print '%s%s' % (fac, vals)
-        f = self.node[fac]['p'] #: table
+        f = self.node[fac]['pmf'] #: table
         return f[vals]
 
     def val(self, var):
@@ -341,6 +411,32 @@ def factor_square():
 
     return G
 
+def factor_xy():
+    G = FactorGraph()
+
+    G.add_var('x', d=2)
+    G.add_var('y', d=2)
+    G.add_fac( pd(magic((2,2))), ['x','y'], name='f' )
+
+    return G
+
+def factor_btree():
+    G = FactorGraph()
+
+    a = 'a'
+    b1,b2 = 'b1','b2'
+    c1,c2,c3,c4 = 'c1','c2','c3','c4'
+    for v in [a, b1,b2, c1,c2,c3,c4]: G.add_var(v, d=2)
+
+    p = pd(magic((2,2)))
+    G.add_fac(p, [a,b1])
+    G.add_fac(p, [a,b2])
+    G.add_fac(p, [b1,c1])
+    G.add_fac(p, [b1,c2])
+    G.add_fac(p, [b2,c1])
+    G.add_fac(p, [b2,c2])
+
+    return G
 
 if __name__=='__main__':
 
@@ -349,6 +445,60 @@ if __name__=='__main__':
     # C = factor_clique()
     # S = factor_square()
 
-    nx.draw(factor_square())
+    # nx.draw(factor_square())
+    # show()
+    
 
-    show()
+    div('testing FactorGraph.subgraph( [var ...], condition={var:val, ...} )')
+
+    G = factor_square()
+    a,b,c,d = G.vars()
+
+
+    alert('testing conditioning...')
+    H = G.subgraph([a,c], condition={d:5-1})
+
+    assert H.vars() == [a,c]
+
+    fcd = H.node['f[cd]']
+    fda = H.node['f[da]']
+    
+    assert fcd['pmf'].shape == (H.node[c]['d'],)
+    assert fda['pmf'].shape == (H.node[a]['d'],)
+    
+    var('f cd', fcd)
+    var('f da', fda)
+    var('H', H.node)
+
+
+    alert('testing marginalization...')
+
+    var('xy', factor_xy().node)
+
+    G = factor_xy()
+    G.eliminate('x')
+    var('elim x', G.node)
+    assert near( G.node['f']['pmf'] , array([0.4, 0.6]) )
+
+    G = factor_xy()
+    G.eliminate('y')
+    var('elim y', G.node)
+    assert near( G.node['f']['pmf'] , array([0.3, 0.7]) )
+
+    G = factor_xy()
+    G.eliminate('x','y')
+    var('elim x y', G.node)
+    assert G.node == {}
+
+    G = factor_xy()
+    G.eliminate('y','x')
+    var('elim y x', G.node)
+    assert G.node == {}
+
+    
+""" ?
+order of FactorGraph.vars() or FactorGraph.facs() matters
+
+
+"""
+

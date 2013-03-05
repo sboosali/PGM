@@ -468,19 +468,17 @@ p[:,2,1] = [ 0.05, 0.4, 0.55 ]
 p[:,2,2] = [ 0.01, 0.09, 0.9 ]
 add_fac(G, p, [BP, TPR, CO])
 
-
-for n in G.node:
-    print
-    print '%s' % (n)
-    print '%s' % (G.node[n])
-
-
 zeros = np.zeros
 
 # # # # # # # # # # # # # # # # # # # # # # 
 # MAIN
 
 if __name__=='__main__':
+    for n in G.node:
+        print
+        print '%s' % (n)
+        print '%s' % (G.node[n])
+
     print
     print G.vals(HR)
 

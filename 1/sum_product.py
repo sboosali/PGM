@@ -1,6 +1,5 @@
 #!/usr/bin/python
 from __future__ import division
-from sam.sam import *
 
 from numpy import *
 from matplotlib.pyplot import *
@@ -11,6 +10,7 @@ import itertools
 from copy import deepcopy
 
 from factor_graph import *
+from sam.sam import *
 
 """
 [1]
@@ -88,7 +88,7 @@ def fac2var(_Mu,Nu, G, f,v):
     
     """
     #print
-    print "fac '%s' \t=>\t var '%s'" % (f,v)
+    #print "fac '%s' \t=>\t var '%s'" % (f,v)
     assert G.type(f)=='fac' and G.type(v)=='var'
 
     vars = G.N(f) # for order
@@ -116,7 +116,7 @@ def fac2var(_Mu,Nu, G, f,v):
     """
 
     # sum (fac * prod nus)
-    fac = G.node[f]['p']
+    fac = G.node[f]['pmf']
     nus = [ (i, _v, Nu[_v, f])  for i,_v in enumerate(G.N(f))  if _v != v  ]
 
     msg = fac
@@ -142,7 +142,7 @@ def fac2var(_Mu,Nu, G, f,v):
 
 def var2fac(Mu,_Nu, G, v,f):
     #print
-    print "var '%s' \t=>\t fac '%s'" % (v,f)
+    #print "var '%s' \t=>\t fac '%s'" % (v,f)
     assert G.type(v)=='var' and G.type(f)=='fac'
 
     """
@@ -171,17 +171,12 @@ def marginal(Mu, G, v):
     # forall f in G.N(v),  p = Nu[v,f] * Mu[f,v]
     return pd([ product([ Mu[f,v][val] for f in G.N(v) ])  for val in G.vals(v) ])
 
-def marginals(Mu,G):
-    return { v : marginal(Mu,G, v) for v in G.vars() }
-
-
-def sumprod_tree(G, Mu=None, Nu=None):
-    if not Mu or not Nu:
-        Mu, Nu = make_messengers(G)
-
+def marginals(Mu,G, vars):
+    return { v : marginal(Mu,G, v) for v in vars }
     
 
-def marginalize_sumprod(G, M=1, N=500, P=2, eps=1e-6):
+
+def marginalize_sumprod(G, M=1, N=500, P=2, eps=1e-6, vars=None):
     """
     : any factor graph => marginals
     : iterative algorithm
@@ -213,13 +208,14 @@ def marginalize_sumprod(G, M=1, N=500, P=2, eps=1e-6):
     -> sumprod on factgraphs iterates approximately (not recurs exactly)
     
 
-
     xs = x        ->  marginalize for this var    => [m]
     xs = [x,y..]  ->  marginalize for these vars  => [m..]
     xs = None     ->  marginalize for each var    => [m..]
 
     """
-    
+
+    if not vars: vars = G.vars()
+
     # "_X" set/write to next/new
     # "X" get/read from curr/old
     _Mu, _Nu = make_messengers(G)
@@ -235,7 +231,7 @@ def marginalize_sumprod(G, M=1, N=500, P=2, eps=1e-6):
 
         if M < i:
             if abs(_diff - diff) < eps and stuck > 1: #HACK diff hits zero every other dunno why
-                print 'sumprod: converged (eps=%.0e)' % eps
+                print 'sumprod: converged (eps=%.0e) in %d iterations' % (eps, i)
                 break
 
             if stuck > P:
@@ -267,7 +263,7 @@ def marginalize_sumprod(G, M=1, N=500, P=2, eps=1e-6):
         diff   = _diff
         Mu, Nu = deepcopy(_Mu), deepcopy(_Nu)
 
-    return marginals(Mu,G)
+    return marginals(Mu,G, vars=vars)
     
     
 
@@ -305,11 +301,13 @@ def joint(G, xs=None):
     return pd(_joint), Z
 
 
-def marginalize_bruteforce(G, xs=None):
+def marginalize_bruteforce(G, vars=None):
+    if not vars: vars = G.vars()
+
     p,_ = joint(G)
     def but(i): return tuple([j for j in range(len(G.vars())) if j!=i])
 
-    marginals = { v : p.sum(axis=but(i))  for i,v in enumerate(G.vars()) }
+    marginals = { v : p.sum(axis=but(i))  for i,v in enumerate(vars) }
 
     return marginals
 
@@ -330,39 +328,17 @@ def test(G, **kwargs):
     compare(sp,bf)
 
 
-def compare(ps,qs):
+def compare(ps,qs, fail=True):
     print
-    for var,p,q in zip( ps, ps.values(), qs.values() ):
-        assert all([near(pi,qi) for pi,qi in zip(p,q)])
 
+    if fail:
+        for var,p,q in zip( ps, ps.values(), qs.values() ):
+            assert all([near(pi,qi) for pi,qi in zip(p,q)])
+        return True
 
-def div(s):
-    un = "\033[0;0m" 
-    bold = "\033[1m"
-    blue = '\033[94m'
+    else:
+        return all([ all([near(pi,qi) for pi,qi in zip(p,q)])  for var,p,q in zip(ps, ps.values(), qs.values()) ])
 
-    print;print
-    print bold+blue + ('--- %s ---' % s) + un
-
-def var(name, val, new=True):
-    un = "\033[0;0m" 
-    bold = "\033[1m"
-    green = '\033[92m'
-
-    assert type(name)==str
-    
-    if new: print
-    print bold+green+ name +un + (' = %s' % str(val))
-
-def alert(msg, t=0):
-    import time
-
-    un = "\033[0;0m" 
-    bold = "\033[1m"
-    red = '\033[91m'
-
-    print bold+red+ msg +un
-    time.sleep(t)
 
 if __name__=='__main__':
 
@@ -582,8 +558,9 @@ if __name__=='__main__':
     G = factor_square()
     test(G)
     
-
-
+    print;print; alert('testing binary tree, whether it converges in |depth| iters...', t=0)
+    G = factor_btree()
+    test(G)
 
     print
     print
