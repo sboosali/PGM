@@ -228,30 +228,33 @@ def marginalize_sumprod(G,
     stuck = 0
     while True:
         if not i < N:
-            alert('sumprod: iterated too many times (N=%d)' % N)
+            alert('[sumprod: iterated too many times (N=%d) with (diff=%.9f)]' % (N,diff))
             break
 
         if M < i:
             if abs(_diff - diff) < eps and stuck > 1: #HACK diff hits zero every other dunno why
-                print 'sumprod: converged (eps=%.0e) in %d iterations' % (eps, i)
+                print '[sumprod: converged (eps=%.0e) in %d iterations]' % (eps, i)
                 break
 
             if stuck > P:
-                print 'sumprod: got stuck %d times at %.9f' % (P, diff)
+                print '[sumprod: got stuck %d times at diff=%.9f]' % (P, diff)
                 break
 
         i += 1
         if verbose: print; print i
 
-        for v in G.vars():
-            for f in G.N(v):
-                msg(Mu,_Nu,G, v,f)
+        # parallel update schedule
 
+        # factor-to-variable
         for f in G.facs():
             for v in G.N(f):
                 msg(_Mu,Nu,G, f,v)
-
         normalize_messenger(_Mu)
+
+        # variable-to-factor
+        for v in G.vars():
+            for f in G.N(v):
+                msg(_Mu,_Nu,G, v,f)
         normalize_messenger(_Nu)
         
         # var('Mu',Mu)

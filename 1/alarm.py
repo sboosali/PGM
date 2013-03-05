@@ -22,10 +22,10 @@ runA=1
 runB=1
 runC=1
 
-runE=0
-runF=0
-runG=0
-runH=0
+runE=1
+runF=1
+runG=1
+runH=1
 
 VERBOSE = 0
 
@@ -170,12 +170,6 @@ discuss what caused exact v approx marginals
 
 
 """ E
-sumprod: converged (eps=1e-06) in 14 iterations
-mean DISCONNECT = 1.9
-mean PULMEMBOLUS = 1.99001429995
-mean INSUFFANESTH = 1.90043976042
-mean LVFAILURE = 1.95
-mean ANAPHYLAXIS = 1.99106463727
 
 probably inexact. the graph is too big
 
@@ -192,8 +186,9 @@ div("E")
 if runE:
     H = deepcopy(G)
     H.condition(HYPOVOLEMIA=0, HR=0, INTUBATION=0, KINKEDTUBE=0, VENTALV=0)
-
-    marginals = marginalize_sumprod(H, vars=[LVFAILURE, ANAPHYLAXIS, INSUFFANESTH, PULMEMBOLUS, DISCONNECT])
+    vars = [LVFAILURE, ANAPHYLAXIS, INSUFFANESTH, PULMEMBOLUS, DISCONNECT]
+    
+    marginals = marginalize_sumprod(H, vars=vars, verbose=VERBOSE)
     means(H, marginals)
 
 
@@ -201,7 +196,7 @@ if runE:
 """ F
 
 
-sumprod: converged (eps=1e-06) in 24 iterations
+[sumprod: converged (eps=1e-06) in 24 iterations]
 mean DISCONNECT = 1.90000000337
 mean HYPOVOLEMIA = 1.8
 mean LVFAILURE = 1.95
@@ -216,8 +211,9 @@ div("F")
 
 if runF:
     H = deepcopy(G)
+    vars = [LVFAILURE, HYPOVOLEMIA, ANAPHYLAXIS, INSUFFANESTH, PULMEMBOLUS, INTUBATION, DISCONNECT, KINKEDTUBE]
 
-    marginals = marginalize_sumprod(H, vars=[LVFAILURE, HYPOVOLEMIA, ANAPHYLAXIS, INSUFFANESTH, PULMEMBOLUS, INTUBATION, DISCONNECT, KINKEDTUBE])
+    marginals = marginalize_sumprod(H, vars=vars, verbose=VERBOSE)
     means(H, marginals)
 
 
@@ -242,8 +238,9 @@ div("G")
 if runG:
     H = deepcopy(G)
     H.condition( HISTORY=0, CVP=0, PCWP=0, BP=0, HRBP=0, HREKG=0, HRSAT=0, EXPCO2=0, MINVOL=0 )
+    vars = [LVFAILURE, HYPOVOLEMIA, ANAPHYLAXIS, INSUFFANESTH, PULMEMBOLUS, INTUBATION, DISCONNECT, KINKEDTUBE]
 
-    marginals = marginalize_sumprod(H, vars=[LVFAILURE, HYPOVOLEMIA, ANAPHYLAXIS, INSUFFANESTH, PULMEMBOLUS, INTUBATION, DISCONNECT, KINKEDTUBE])
+    marginals = marginalize_sumprod(H, vars=vars, verbose=VERBOSE)
     means(H, marginals)
 
 
@@ -275,7 +272,8 @@ if runH:
     H.condition( HISTORY=0, CVP=0, PCWP=0, BP=0, 
                  HRBP=3-1, HREKG=3-1, HRSAT=3-1,
                  EXPCO2=0, MINVOL=0 )
+    vars = [LVFAILURE, HYPOVOLEMIA, ANAPHYLAXIS, INSUFFANESTH, PULMEMBOLUS, INTUBATION, DISCONNECT, KINKEDTUBE]
 
-    marginals = marginalize_sumprod(H, vars=[LVFAILURE, HYPOVOLEMIA, ANAPHYLAXIS, INSUFFANESTH, PULMEMBOLUS, INTUBATION, DISCONNECT, KINKEDTUBE], N=1000)
+    marginals = marginalize_sumprod(H, vars=vars, N=2000, verbose=VERBOSE)
     means(H, marginals)
 
