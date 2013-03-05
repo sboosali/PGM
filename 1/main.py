@@ -10,7 +10,7 @@ import nltk
 import numpy.random as sample
 import scipy.stats as pdf
 
-from factor_graph import *
+from factorgraph import *
 
 zeros = sam.splat(zeros)
         

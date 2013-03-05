@@ -495,10 +495,6 @@ if __name__=='__main__':
     var('elim y x', G.node)
     assert G.node == {}
 
-    
 """ ?
 order of FactorGraph.vars() or FactorGraph.facs() matters
-
-
 """
-

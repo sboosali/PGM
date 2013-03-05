@@ -7,7 +7,7 @@ from matplotlib.pyplot import *
 import numpy.random as sample
 import scipy.stats as pdf
 
-from sum_product import *
+from sumproduct import *
 from main import *
 
 """
@@ -20,14 +20,14 @@ max |message[t] - message[t-1]| < 1e-6
 
 runA=1
 runB=1
-runC=0
+runC=1
 
 runE=0
 runF=0
 runG=0
 runH=0
 
-
+VERBOSE = 0
 
 
 def expectation(p,f, xs):
@@ -38,13 +38,13 @@ def mean(p, xs):
 
 def means(G, marginals):
     for v, p in marginals.items():
-        var( 'mean %s' % v,  mean(p, [1+x for x in range(G.node[v]['d'])]), new=False )
+        var( 'mean %s' % v,  mean(p, [1+x for x in range(G.node[v]['d'])]), new=False, tab=True )
     
 
 def test(H, fail=False, vars=None):
     if not vars: vars = H.vars()
 
-    marginals = marginalize_sumprod(H, vars=vars)
+    marginals = marginalize_sumprod(H, vars=vars, verbose=VERBOSE)
     _marginals = marginalize_bruteforce(H, vars=vars)
 
     var('[sumprod]', marginals)
@@ -57,10 +57,10 @@ def test(H, fail=False, vars=None):
     else:
         alert('[sumprod] != [bruteforce]');print
 
-        alert('[bruteforce] means')
+        alert('[bruteforce means]')
         means(H, _marginals)
 
-        alert('[sumprod] means')
+        alert('[sumprod means]')
         means(H, marginals)
 
 
@@ -93,7 +93,7 @@ if runA:
     vars = causes + effects
     H = G.subgraph(vars, condition={VENTMACH: 4-1, DISCONNECT: 2-1})
    
-    test(H, fail=True)
+    test(H, fail=True, vars=causes)
 
 
 
@@ -107,19 +107,13 @@ cmp to bruteforce
 
 
 
-# diff from enumerate-marginals
-# sumprod    ==> 'VENTLUNG': array([ 0.03675307,  0.0544856 ,  0.02996484,  0.87879648]),
-# bruteforce ==> 'VENTLUNG': array([ 0.02170002,  0.03458139,  0.03040155,  0.91331704]),
-#
-# mean PAP = 2.01495291805
-# mean VENTLUNG = 3.83533561676
+
+# same as enumerate-marginals on approx
+
 # mean VENTTUBE = 3.92576957844
 # mean KINKEDTUBE = 1.99852287653
 # mean INTUBATION = 2.90293068064
 # mean PULMEMBOLUS = 1.98107225563
-#
-# [exact]  mean VENTLUNG = 3.83533561676
-# [approx] mean VENTLUNG = 3.75080473771
 
 """
 div('B')
@@ -130,7 +124,7 @@ if runB:
     vars = causes + effects
     H = G.subgraph(vars, condition={ VENTMACH: 4-1, DISCONNECT: 2-1, SHUNT: 2-1, PRESS: 4-1 })
 
-    test(H)
+    test(H, vars=causes)
 
 
 
@@ -163,7 +157,7 @@ if runC:
     unobserved  = [INTUBATION, VENTTUBE, KINKEDTUBE, VENTLUNG]
     H = G.subgraph(unobserved, condition={ VENTMACH: 4-1, DISCONNECT: 2-1, PRESS: 4-1, MINVOL: 2-1 })
 
-    test(H)
+    test(H, vars=unobserved)
 
 """ D
 discuss what caused exact v approx marginals

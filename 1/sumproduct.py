@@ -9,7 +9,7 @@ import networkx as nx
 import itertools
 from copy import deepcopy
 
-from factor_graph import *
+from factorgraph import *
 from sam.sam import *
 
 """
@@ -176,7 +176,9 @@ def marginals(Mu,G, vars):
     
 
 
-def marginalize_sumprod(G, M=1, N=500, P=2, eps=1e-6, vars=None):
+def marginalize_sumprod(G, 
+                        M=1, N=500, P=2, eps=1e-6, 
+                        vars=None, verbose=True):
     """
     : any factor graph => marginals
     : iterative algorithm
@@ -238,7 +240,8 @@ def marginalize_sumprod(G, M=1, N=500, P=2, eps=1e-6, vars=None):
                 print 'sumprod: got stuck %d times at %.9f' % (P, diff)
                 break
 
-        i += 1; print; print i
+        i += 1
+        if verbose: print; print i
 
         for v in G.vars():
             for f in G.N(v):
@@ -256,7 +259,7 @@ def marginalize_sumprod(G, M=1, N=500, P=2, eps=1e-6, vars=None):
         _diff = max( max( max(abs(_Mu[fv] - Mu[fv])) for fv in Mu ),
                      max( max(abs(_Nu[vf] - Nu[vf])) for vf in Nu ))
         
-        var('diff', '%.12f' % abs(_diff - diff))
+        if verbose: var('diff', '%.12f' % abs(_diff - diff))
 
         stuck = 1+stuck if abs(_diff - diff) < eps else 0
 
@@ -303,11 +306,13 @@ def joint(G, xs=None):
 
 def marginalize_bruteforce(G, vars=None):
     if not vars: vars = G.vars()
-
+    
     p,_ = joint(G)
     def but(i): return tuple([j for j in range(len(G.vars())) if j!=i])
 
-    marginals = { v : p.sum(axis=but(i))  for i,v in enumerate(vars) }
+    marginals = { v : p.sum(axis=but(i))
+                  for i,v in enumerate(G.vars()) 
+                  if v in vars }
 
     return marginals
 
