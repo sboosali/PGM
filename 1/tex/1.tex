@@ -140,7 +140,7 @@ sumprod was approx (VENTLUNG and INTUBATION are off by over 10\%)
 if we think of the factor graphs as just undirected graphs, all three have cycles. but if we only think about the variables communicating via factors, then the (c) subgraph has MINVOL, which makes a cycle between VENTLUNG and INTUBATION that propagates messages. this is consistent in that only VENTLUNG and INTUBATION are significantly different from their exact values.
  
 \subsection{}
-sumprod probably computes inexact marginals. the graph is too big.
+sumprod probably computes inexact marginals. the graph has too many variable cycles.
 
 [sumprod: converged (eps=1e-06) in 14 iterations]
 \newline mean DISCONNECT = 1.9
@@ -204,9 +204,11 @@ the most significant difference is that (h) converges whereas (g) doesn't.
 
 %TODO
 %\begin{comment}
-      
+
 
 \subsection{}
+the maximal elimination clique is 5 once we eliminate $(8)$ (the graph gets connected and stays connected).
+
 \begin{center}
 \begin{tikzpicture}[scale=0.1]
 \tikzstyle{every node}+=[inner sep=0pt]
@@ -645,6 +647,8 @@ the most significant difference is that (h) converges whereas (g) doesn't.
 
 
 \subsection{}
+
+the maximal elimination clique is only 3. this is the more efficient elimination ordering (probably the minimal one).
 
 \begin{center}
 \begin{tikzpicture}[scale=0.1]
