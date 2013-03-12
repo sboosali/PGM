@@ -173,7 +173,7 @@ class FactorGraph(nx.Graph):
         if name is None:
             name = self.new('x')
     
-        self.add_node( name, d=d, type='var' )
+        self.add_node( name, d=d, type='var', val=val )
         self.graph['vars'].append( name )
     
     
@@ -189,12 +189,13 @@ class FactorGraph(nx.Graph):
     
         
         """
-        p = pd(p)
+        if type(p)==type(lambda x:x):
+            pass
+        else:
+            p = pd(p)
         
         if name is None or name in self:
             name = self.new('f')
-    
-        p = array(p)
     
         self.add_node( name, pmf=p, vars=vars, type='fac' ) # 'vars' for order
         self.graph['facs'].append( name )
@@ -222,20 +223,36 @@ class FactorGraph(nx.Graph):
     def vars(self, but=None):
         #return [x for x in self  if self.node[x]['type']=='var']
         return self.graph['vars']
-
+    
     def facs(self, but=None):
         #return [x for x in self  if self.node[x]['type']=='fac']
         return self.graph['facs']
 
 
-    def __call__(self, fac, *vals):
-        #print '%s%s' % (fac, vals)
-        f = self.node[fac]['pmf'] #: table
-        return f[vals]
+    def __call__(self, fac,*vals):
+        debug = 0
+
+        f = self.node[fac]['pmf'] #: table or function
+
+        if type(f)==ndarray:
+            assert len(vals) == len(f.shape)
+
+            if debug: print '%s%s' % (fac, vals)
+            return f[vals]
+
+        if type(f)==type(lambda x:x):
+            vars = self.node[fac]['vars']
+            vals = tuple([self.node[var]['val'] for var in vars])
+
+            if debug: print '%s%s' % (fac, vals)
+            return f(*vals)
+
+        raise ValueError('the factor "%s" must be an ndarray or a function'
+                         % fac)
 
     def val(self, var):
         assert self.type(var) == 'var'
-        return G.node[var]['x']
+        return G.node[var]['val']
 
     def vals(self, var):
         """

@@ -215,8 +215,11 @@ def marginalize_sumprod(G,
     xs = None     ->  marginalize for each var    => [m..]
 
     """
-
     if not vars: vars = G.vars()
+
+    kwargs = dict(N=500, eps=1e-6, vars=None)
+    alert('sumprod')
+    for k,v in kwargs.items(): alert(' %s = %s' % (k,v),new=False)
 
     # "_X" set/write to next/new
     # "X" get/read from curr/old
