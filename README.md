@@ -1,4 +1,4 @@
 PGM
 ===
 
-probabilistic graphical models, 2950p
+probabilistic graphical models
