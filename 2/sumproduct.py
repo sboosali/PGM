@@ -8,6 +8,7 @@ import scipy.stats as pdf
 import networkx as nx
 import itertools
 from copy import deepcopy
+from collection import namedtuple
 
 from factorgraph import *
 from sam.sam import *
@@ -173,12 +174,12 @@ def marginal(Mu, G, v):
 
 def marginals(Mu,G, vars):
     return { v : marginal(Mu,G, v) for v in vars }
-    
+
 
 
 def marginalize_sumprod(G, 
-                        M=1, N=500, P=2, eps=1e-6, 
-                        vars=None, verbose=True):
+                        M=1, N=500, P=2, eps=1e-6, vars=None,
+                        aux_y=None, aux_f=None, verbose=True):
     """
     : any factor graph => marginals
     : iterative algorithm
@@ -214,12 +215,22 @@ def marginalize_sumprod(G,
     xs = [x,y..]  ->  marginalize for these vars  => [m..]
     xs = None     ->  marginalize for each var    => [m..]
 
+
+    'aux_f' is an auxiliary function that can compute whatever it wants every iteration
+    'aux_y' is the auxiliary data structure aux_f saves what it computes into
+    (later) 'aux_x' are the iteration's data that aux_f computes
+
     """
     if not vars: vars = G.vars()
 
-    kwargs = dict(N=500, eps=1e-6, vars=None)
+    kwargs = [('N',N),
+              ('eps',eps),
+              ('vars',vars)]
     alert('sumprod')
-    for k,v in kwargs.items(): alert(' %s = %s' % (k,v),new=False)
+    for k,v in kwargs: var(k,v, new=False)
+
+    if aux_y and aux_f:
+        Aux = namedtuple('Aux', ['G', 'Mu','Nu'])
 
     # "_X" set/write to next/new
     # "X" get/read from curr/old
@@ -245,6 +256,10 @@ def marginalize_sumprod(G,
 
         i += 1
         if verbose: print; print i
+
+        if aux_y and aux_f:
+            aux_x = Aux(G=G, Mu=Mu, Nu=Nu)
+            aux_f(aux_x, aux_y)
 
         # parallel update schedule
 
@@ -272,9 +287,12 @@ def marginalize_sumprod(G,
         diff   = _diff
         Mu, Nu = deepcopy(_Mu), deepcopy(_Nu)
 
-    return marginals(Mu,G, vars=vars)
-    
-    
+    if aux_y is not None and aux_f is not None:
+        return aux_y, marginals(Mu,G, vars=vars)
+    else:
+        return marginals(Mu,G, vars=vars)
+
+
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
 # B

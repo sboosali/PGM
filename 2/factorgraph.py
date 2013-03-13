@@ -241,8 +241,8 @@ class FactorGraph(nx.Graph):
             return f[vals]
 
         if type(f)==type(lambda x:x):
-            vars = self.node[fac]['vars']
-            vals = tuple([self.node[var]['val'] for var in vars])
+            #vars = self.node[fac]['vars']
+            #vals = tuple([self.node[var]['val'] for var in vars])
 
             if debug: print '%s%s' % (fac, vals)
             return f(*vals)
