@@ -9,10 +9,11 @@ from scipy.io import loadmat
 import networkx as nx
 
 from sam.sam import *
+import sam.sam as sam
 from factorgraph import *
 from sumproduct import *
 
-
+img = 1
 runB = 0
 runC = 1
 runD = 0
@@ -244,20 +245,32 @@ if __name__=='__main__':
         eps = 0.05
         N = 50
         Y = zeros(2*n)
-
-        aux_y = []
+    
         def aux_f(aux_x, aux_y):
             G,Mu = aux_x.G, aux_x.Mu
 
             Ps = marginals(Mu,G)
-            fX = ML(Ps).values()
+            fX = array(ML(Ps).values())
 
             aux_y.append(hamming_distance(Y,fX))
             #  order dont matter, since Y is all zeros
         
         for i in range(10):
-            #Ps, aux_y = 
-    
+            B = channel(Y, eps=eps)
+            set_bits(G, B, eps)
+            
+            # marginals and hamming distances
+            Ps, Ds = marginalize_sumprod(G, N=N,
+                                         aux_f=aux_f, aux_y=[], verbose=1)
+
+            if img:
+                figure()
+                x,xx = 1,N
+                y,yy = 0 -1, n +1
+                axis((x,xx,y,yy))
+                scatter([j+1 for (j,_) in enumerate(Ds)], Ds, s=50)
+                savefig('img/%s 1C.png' % sam.pad(i+1, '0', 2))
+
 
     div('1D')
     if runD:

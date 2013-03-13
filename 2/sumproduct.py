@@ -172,7 +172,8 @@ def marginal(Mu, G, v):
     # forall f in G.N(v),  p = Nu[v,f] * Mu[f,v]
     return pd([ product([ Mu[f,v][val] for f in G.N(v) ])  for val in G.vals(v) ])
 
-def marginals(Mu,G, vars):
+def marginals(Mu,G, vars=None):
+    if vars is None: vars = G.vars()
     return { v : marginal(Mu,G, v) for v in vars }
 
 
@@ -229,7 +230,7 @@ def marginalize_sumprod(G,
     alert('sumprod')
     for k,v in kwargs: var(k,v, new=False)
 
-    if aux_y and aux_f:
+    if aux_y is not None and aux_f:
         Aux = namedtuple('Aux', ['G', 'Mu','Nu'])
 
     # "_X" set/write to next/new
@@ -257,10 +258,6 @@ def marginalize_sumprod(G,
         i += 1
         if verbose: print; print i
 
-        if aux_y and aux_f:
-            aux_x = Aux(G=G, Mu=Mu, Nu=Nu)
-            aux_f(aux_x, aux_y)
-
         # parallel update schedule
 
         # factor-to-variable
@@ -286,6 +283,12 @@ def marginalize_sumprod(G,
 
         diff   = _diff
         Mu, Nu = deepcopy(_Mu), deepcopy(_Nu)
+        
+
+        if aux_y is not None and aux_f:
+            aux_x = Aux(G=G, Mu=Mu, Nu=Nu)
+            aux_f(aux_x, aux_y)
+
 
     if aux_y is not None and aux_f is not None:
         return marginals(Mu,G, vars=vars), aux_y
