@@ -8,7 +8,7 @@ import scipy.stats as pdf
 import networkx as nx
 import itertools
 from copy import deepcopy
-from collection import namedtuple
+from collections import namedtuple
 
 from factorgraph import *
 from sam.sam import *
@@ -288,7 +288,7 @@ def marginalize_sumprod(G,
         Mu, Nu = deepcopy(_Mu), deepcopy(_Nu)
 
     if aux_y is not None and aux_f is not None:
-        return aux_y, marginals(Mu,G, vars=vars)
+        return marginals(Mu,G, vars=vars), aux_y
     else:
         return marginals(Mu,G, vars=vars)
 

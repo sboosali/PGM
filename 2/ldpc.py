@@ -235,7 +235,7 @@ if __name__=='__main__':
 
         X,fX,Y,ms,p1 = test(G, eps=0.05, N=50)
 
-        plot(p1); show()
+        #plot(p1); show()
 
 
 
@@ -256,7 +256,7 @@ if __name__=='__main__':
             #  order dont matter, since Y is all zeros
         
         for i in range(10):
-            pass
+            #Ps, aux_y = 
     
 
     div('1D')
