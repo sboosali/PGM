@@ -14,11 +14,12 @@ from factorgraph import *
 from sumproduct import *
 
 img = 1
+
 runB = 0
-runC = 1
+runC = 0
 runD = 0
-
-
+runE = 1
+runF = 0
 
 """
 
@@ -177,6 +178,35 @@ def test(G, eps=None, N=None):
     return X,fX,Y, Ps,posterior_is_one
     
 
+def tests(K=None, N=None, eps=None, name=None):
+    assert all([ arg is not None for arg in [K,N,eps,name] ])
+
+    Y = zeros(2*n)
+
+    def aux_f(aux_x, aux_y):
+        G,Mu = aux_x.G, aux_x.Mu
+        Ps = marginals(Mu,G)
+        fX = array(ML(Ps).values())
+        aux_y.append(hamming_distance(Y,fX))
+        #  order dont matter, since Y is all zeros
+    
+    for i in range(K):
+        text(str(i+1))
+        B = channel(Y, eps=eps)
+        set_bits(G, B, eps)
+            
+        # marginals and hamming distances
+        Ps, Ds = marginalize_sumprod(G, N=N,
+                                         aux_f=aux_f, aux_y=[], verbose=0)
+
+        if img:
+            figure()
+            x,xx = 1,N
+            y,yy = 0 -1, n +1
+            axis((x,xx,y,yy))
+            scatter([j+1 for (j,_) in enumerate(Ds)], Ds, s=50)
+            savefig('img/%s/%s.png' % (sam.pad(i+1, '0', 2), name))
+
     
 if __name__=='__main__':
     
@@ -242,43 +272,20 @@ if __name__=='__main__':
 
     div('1C')
     if runC:
-        eps = 0.05
-        N = 50
-        Y = zeros(2*n)
-    
-        def aux_f(aux_x, aux_y):
-            G,Mu = aux_x.G, aux_x.Mu
-
-            Ps = marginals(Mu,G)
-            fX = array(ML(Ps).values())
-
-            aux_y.append(hamming_distance(Y,fX))
-            #  order dont matter, since Y is all zeros
-        
-        for i in range(10):
-            B = channel(Y, eps=eps)
-            set_bits(G, B, eps)
-            
-            # marginals and hamming distances
-            Ps, Ds = marginalize_sumprod(G, N=N,
-                                         aux_f=aux_f, aux_y=[], verbose=1)
-
-            if img:
-                figure()
-                x,xx = 1,N
-                y,yy = 0 -1, n +1
-                axis((x,xx,y,yy))
-                scatter([j+1 for (j,_) in enumerate(Ds)], Ds, s=50)
-                savefig('img/%s 1C.png' % sam.pad(i+1, '0', 2))
+        tests(K=10, N=50, name='1c', eps=0.05)
 
 
     div('1D')
     if runD:
-        X,fX,Y,ms,p1 = test(G, eps=0.09, N=50)
+        tests(K=10, N=50, name='1d', eps=0.09)
 
-    
+    div('1E')
+    if runE:
+        pass
 
-
+    div('1F')
+    if runF:
+        pass
 
 
     div('all tests passed!')
