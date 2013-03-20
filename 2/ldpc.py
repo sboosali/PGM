@@ -1,24 +1,24 @@
 #!/usr/bin/python
-from __future__ import division
-
 from numpy import *
 from matplotlib.pyplot import *
 import numpy.random as sample
 import scipy.stats as pdf
 from scipy.io import loadmat
 import networkx as nx
+from scipy.ndimage import imread
 
 from sam.sam import *
 import sam.sam as sam
 from factorgraph import *
 from sumproduct import *
 
-img = 1
+image = 1
 
+runA = 1
 runB = 0
 runC = 0
 runD = 0
-runE = 1
+runE = 0
 runF = 0
 
 """
@@ -37,7 +37,7 @@ test  P(invalid)==0
 """
 
 def ML(marginals):
-    return { X:argmax(pX)  for X,pX in marginals.iteritems() }
+    return { X:argmax(pX)  for X,pX in marginals.items() }
 
 def isBitvector(B):
     return type(B)==ndarray and all((B==0) + (B==1))
@@ -148,10 +148,10 @@ def test(G, eps=None, N=None):
     
     text('channel got what input?')
     Ps = marginalize_sumprod(G, N=N, verbose=1)
-    print Ps
+    print(Ps)
 
     posterior_is_one = [probs[1] for (bit,probs) in 
-                        sorted(Ps.items(), key=fst)]
+                        sorted(list(Ps.items()), key=fst)]
 
     # observed channel output
     X = B
@@ -165,10 +165,10 @@ def test(G, eps=None, N=None):
     #var('output', bitstring(fX))
     #var('input', bitstring(Y))
 
-    print
+    print()
     text('decode(output) versus true input')
-    color('green', 'o'); print ':= same'
-    color('red', 'x');   print ':= diff'
+    color('green', 'o'); print(':= same')
+    color('red', 'x');   print(':= diff')
     for fx,y in zip(fX, Y):
         if fx==y:
             color('green', 'o')
@@ -186,7 +186,7 @@ def tests(K=None, N=None, eps=None, name=None):
     def aux_f(aux_x, aux_y):
         G,Mu = aux_x.G, aux_x.Mu
         Ps = marginals(Mu,G)
-        fX = array(ML(Ps).values())
+        fX = array(list(ML(Ps).values()))
         aux_y.append(hamming_distance(Y,fX))
         #  order dont matter, since Y is all zeros
     
@@ -199,54 +199,95 @@ def tests(K=None, N=None, eps=None, name=None):
         Ps, Ds = marginalize_sumprod(G, N=N,
                                          aux_f=aux_f, aux_y=[], verbose=0)
 
-        if img:
+        if image:
             figure()
             x,xx = 1,N
             y,yy = 0 -1, n +1
             axis((x,xx,y,yy))
             scatter([j+1 for (j,_) in enumerate(Ds)], Ds, s=50)
-            savefig('img/%s/%s.png' % (sam.pad(i+1, '0', 2), name))
+            savefig('img/%s/%s.png' % (name, sam.pad(i+1, '0', 2)))
 
-    
+
+def bwshow(bool_matrix):
+    imshow(bool_matrix, cmap='Greys', interpolation='nearest')
+
+
+def decode_image(img, eps):
+
+    img = imread('data/%s' % img)
+    img = img < (img.max() - img.min())/2 # black and white
+    height, width = img.shape
+    assert height==40 and width==40
+    assert all(img == img.reshape(1600).reshape((40,40)))
+    #imshow(img, cmap='Greys', interpolation='nearest') ;show()
+    # G encodes any image wrt H
+    # G is half identity, half matrix that magically
+    #  multiplies any image into itself concatenated 
+    #  onto some bits such that together they
+    #  satisfy all the parity checks of H
+    assert G[:N,:] == identity(N)
+
+    # image => encode by G => noise by eps => 
+
+    # message
+    msg = img.reshape(1600)
+    # parity checks
+    #  choose random even subsets of the one bits
+    #  and random subsets of the zero bits
+    n = 800
+    pcs = zeros((n, 2*n))
+    Ns = set([0, 1, 2, 3, 5, 10, 20, 30])
+
+
+
+    def aux_f(aux_x, aux_y):           
+        if aux_x.i in Ns:
+            Ps = marginals(aux_x.Mu, aux_x.G)
+            fX = array(list(ML(Ps).values()))
+            aux_y[i] = hamming_distance(Y,fX)
+            #  order dont matter, since Y is all zeros
+            
+    return 
+
 if __name__=='__main__':
     
     div('1A')
-
-    eps = 0
-
-    H = zeros((3,6), dtype=uint8)
-    H[0,:] = [1,0,0,0,0,1]
-    H[1,:] = [0,1,0,1,0,1]
-    H[2,:] = [1,0,1,0,1,0]
-    var('H',H)
-
-    B = [1, 0, 1, 1, 0, 1]
-    var('B',B)
-
-    G = ldpc_to_fgm(H)
-    set_bits(G,B,eps)
-
-    var('G',G.node)
-
-    checks = [f for f in G.facs()  if len(G.node[f]['vars']) > 1]
-    var('checks', checks)
-
-    text("it's a valid codeword")
-    ok = valid(G)
-    print ok
-    assert all(ok)
-
-    text("if you flip any one bit, some parity check fails, and the message becomes invalid")
-    for v in G.vars():
-        G.node[v]['val'] = flip(G.node[v]['val'])
-
+    if runA:
+        eps = 0
+    
+        H = zeros((3,6), dtype=uint8)
+        H[0,:] = [1,0,0,0,0,1]
+        H[1,:] = [0,1,0,1,0,1]
+        H[2,:] = [1,0,1,0,1,0]
+        var('H',H)
+    
+        B = [1, 0, 1, 1, 0, 1]
+        var('B',B)
+    
+        G = ldpc_to_fgm(H)
+        set_bits(G,B,eps)
+    
+        var('G',G.node)
+    
+        checks = [f for f in G.facs()  if len(G.node[f]['vars']) > 1]
+        var('checks', checks)
+    
+        text("it's a valid codeword")
         ok = valid(G)
-        print ok
-        assert not all(ok)
-        
-        
-        G.node[v]['val'] = flip(G.node[v]['val'])
-        
+        print(ok)
+        assert all(ok)
+    
+        text("if you flip any one bit, some parity check fails, and the message becomes invalid")
+        for v in G.vars():
+            G.node[v]['val'] = flip(G.node[v]['val'])
+    
+            ok = valid(G)
+            print(ok)
+            assert not all(ok)
+            
+            
+            G.node[v]['val'] = flip(G.node[v]['val'])
+
 
 
 
@@ -257,36 +298,44 @@ if __name__=='__main__':
 
 
     div('1B')
-    """ 1b
-    prob. if any parity check fails, any product with its "probabilty" implodes to zero
-    soln. 
-    
-    """
     if runB:
+        N = 50
 
-        X,fX,Y,ms,p1 = test(G, eps=0.05, N=50)
+        X,fX,Y,ms,p1 = test(G, eps=0.05, N=N)
 
-        #plot(p1); show()
-
+        if image:
+            figure()
+            x,xx = 1,n
+            y,yy = 0,1
+            axis((x,xx,y,yy))
+            scatter([j+1 for j in range(len(p1))], p1, s=50)
+            savefig('img/%s/%s.png' % ('1b', 'plot'))
 
 
     div('1C')
     if runC:
         tests(K=10, N=50, name='1c', eps=0.05)
 
-
     div('1D')
     if runD:
         tests(K=10, N=50, name='1d', eps=0.09)
 
+
+
+        
+    data = loadmat('data/ldpc36-1600.mat')
+    G,H,M = data['G'],data['H'],data['logo']
+
     div('1E')
     if runE:
-        pass
+        decode_image('calvin.png', 0.08)
 
     div('1F')
     if runF:
-        pass
+        # higher epsilon
+        decode_image('calvin.png', 0.16)
 
 
     div('all tests passed!')
 
+    

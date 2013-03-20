@@ -255,6 +255,12 @@ def marginalize_sumprod(G,
                 print '[sumprod: got stuck %d times at diff=%.9f]' % (P, diff)
                 break
 
+
+        if aux_y is not None and aux_f:
+            aux_x = Aux(G=G, Mu=Mu, Nu=Nu, i=i)
+            aux_f(aux_x, aux_y)
+
+
         i += 1
         if verbose: print; print i
 
@@ -283,11 +289,6 @@ def marginalize_sumprod(G,
 
         diff   = _diff
         Mu, Nu = deepcopy(_Mu), deepcopy(_Nu)
-        
-
-        if aux_y is not None and aux_f:
-            aux_x = Aux(G=G, Mu=Mu, Nu=Nu)
-            aux_f(aux_x, aux_y)
 
 
     if aux_y is not None and aux_f is not None:
