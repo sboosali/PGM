@@ -228,10 +228,12 @@ def marginalize_sumprod(G,
               ('eps',eps),
               ('vars',vars)]
     alert('sumprod')
-    for k,v in kwargs: var(k,v, new=False)
+    if verbose:
+        for k,v in kwargs:
+            var(k,v, new=False)
 
     if aux_y is not None and aux_f:
-        Aux = namedtuple('Aux', ['G', 'Mu','Nu'])
+        Aux = namedtuple('Aux', ['G', 'Mu','Nu','i','diff'])
 
     # "_X" set/write to next/new
     # "X" get/read from curr/old
@@ -241,6 +243,11 @@ def marginalize_sumprod(G,
     i = 0
     _diff, diff = +inf, 0
     stuck = 0
+
+    # if aux_y is not None and aux_f:
+    #     aux_x = Aux(G=G, Mu=Mu, Nu=Nu, i=i, diff=diff)
+    #     aux_f(aux_x, aux_y)
+
     while True:
         if not i < N:
             alert('[sumprod: iterated too many times (N=%d) with (diff=%.9f)]' % (N,diff))
@@ -255,14 +262,13 @@ def marginalize_sumprod(G,
                 print '[sumprod: got stuck %d times at diff=%.9f]' % (P, diff)
                 break
 
-
-        if aux_y is not None and aux_f:
-            aux_x = Aux(G=G, Mu=Mu, Nu=Nu, i=i)
-            aux_f(aux_x, aux_y)
-
-
         i += 1
         if verbose: print; print i
+
+        if aux_y is not None and aux_f:
+            aux_x = Aux(G=G, Mu=Mu, Nu=Nu, i=i, diff=diff)
+            aux_f(aux_x, aux_y)
+
 
         # parallel update schedule
 
