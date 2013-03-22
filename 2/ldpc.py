@@ -1,4 +1,6 @@
 #!/usr/bin/python
+from __future__ import division
+
 from numpy import *
 from matplotlib.pyplot import *
 import numpy.random as sample
@@ -14,12 +16,12 @@ from sumproduct import *
 
 image = 1
 
-runA = 1
+runA = 0
 runB = 0
 runC = 0
 runD = 0
-runE = 0
-runF = 0
+runE = 1
+runF = 1
 
 """
 
@@ -36,13 +38,20 @@ test  P(invalid)==0
 
 """
 
-def ML(marginals):
+def MLE(marginals):
+    """ : {X : pmf on X} => {X => val of X} """
     return { X:argmax(pX)  for X,pX in marginals.items() }
 
 def isBitvector(B):
     return type(B)==ndarray and all((B==0) + (B==1))
 
-def ldpc_to_fgm(H, debug=True):
+def decode(Ps):
+    """ decode message from marginals
+    : { var => [(val,prob)] } => [val]
+    """
+    return array([ val for (var,val) in sorted( MLE(Ps).items(), key=lambda(var,val):var ) ])
+
+def ldpc_to_fgm(H, debug=False):
     """ : ldpc code matrix => factor graphical model
     H[i,j] == 1  :=  bit j depends on check i
 
@@ -186,7 +195,7 @@ def tests(K=None, N=None, eps=None, name=None):
     def aux_f(aux_x, aux_y):
         G,Mu = aux_x.G, aux_x.Mu
         Ps = marginals(Mu,G)
-        fX = array(list(ML(Ps).values()))
+        fX = array(list(MLE(Ps).values()))
         aux_y.append(hamming_distance(Y,fX))
         #  order dont matter, since Y is all zeros
     
@@ -211,8 +220,27 @@ def tests(K=None, N=None, eps=None, name=None):
 def bwshow(bool_matrix):
     imshow(bool_matrix, cmap='Greys', interpolation='nearest')
 
+def img2msg(img):
+    msg = img.reshape(1600)
+    msg = odd(mul(G, msg))
+    return msg
 
-def decode_image(img, eps):
+def msg2img(msg):
+    return msg[:1600].reshape((40,40))
+
+# 1e 1f    
+def decode_image(dir, img, eps):
+    ion()
+
+    data = loadmat('data/ldpc36-1600.mat')
+    G,H,_img = data['G'],data['H'],data['logo']
+    n = 1600
+    assert all(G[:n,:] == identity(n))
+    # G encodes any image wrt H
+    # G is half identity, half matrix that magically
+    #  multiplies any image into itself concatenated 
+    #  onto some bits such that together they
+    #  satisfy all the parity checks of H
 
     img = imread('data/%s' % img)
     img = img < (img.max() - img.min())/2 # black and white
@@ -220,34 +248,72 @@ def decode_image(img, eps):
     assert height==40 and width==40
     assert all(img == img.reshape(1600).reshape((40,40)))
     #imshow(img, cmap='Greys', interpolation='nearest') ;show()
-    # G encodes any image wrt H
-    # G is half identity, half matrix that magically
-    #  multiplies any image into itself concatenated 
-    #  onto some bits such that together they
-    #  satisfy all the parity checks of H
-    assert G[:N,:] == identity(N)
 
-    # image => encode by G => noise by eps => 
+    ion()
+    img = _img
+    bwshow(img);draw()
 
-    # message
-    msg = img.reshape(1600)
-    # parity checks
-    #  choose random even subsets of the one bits
-    #  and random subsets of the zero bits
-    n = 800
-    pcs = zeros((n, 2*n))
-    Ns = set([0, 1, 2, 3, 5, 10, 20, 30])
+    ## image => encode by G => noise by channel => decode by sumprod => cmp
+
+    _msg = img.reshape(1600) # before
+    _msg = odd(G.dot(_msg))
+    #msg = channel(_msg, eps) # after
+    msg = _msg # DOESNT HELP
+    #bwshow(msg2img(msg));draw();
+    bwshow(msg.reshape((80,40)));draw()
+    var('hamming x y / len(x or y)', hamming_distance(_msg, msg) / len(msg))
+
+    # circ = zeros((7,7),dtype=bool)
+    # circ[1,3]    =1
+    # circ[2,[2,4]]=1
+    # circ[3,[1,5]]=1
+    # circ[4,[2,4]]=1
+    # circ[5,3]    =1
+
+    # msg = circ.reshape(49)
+    # print info(msg)
+    # print odd.__module__
+    # print mul.__module__
+    # print 'segfault?'
+    # msg = odd(mul(G, msg))
+    # msg = channel(msg, eps)
+    # bwshow(msg.reshape((7,7)));show()
 
 
+    #time.sleep(600);exit()
 
-    def aux_f(aux_x, aux_y):           
+    FG = ldpc_to_fgm(H)
+    set_bits(FG, _msg, eps)
+
+    N = 50
+    Ns = [0, 1, 2, 3, 5, 10, 20, 30]
+    def aux_f(aux_x, aux_y):
+        # # init to prior
+        # # DOESNT HELP
+        # if aux_x.i == 1:
+        #     print aux_x.Mu[('f0','b0')]
+        #     G = aux_x.G
+        #     for j in range(3200):
+        #         b = 'b%d'%j
+        #         f = 'f%d'%j
+        #         print G.node[f]
+        #         if G.node[f]['pmf'].size == 2:
+        #             aux_x.Mu[(f,b)] = G.node[f]['pmf']
+
+        # get marginals => decode => msg to img => save/show
         if aux_x.i in Ns:
             Ps = marginals(aux_x.Mu, aux_x.G)
-            fX = array(list(ML(Ps).values()))
-            aux_y[i] = hamming_distance(Y,fX)
-            #  order dont matter, since Y is all zeros
-            
-    return 
+            msg = decode(Ps)
+            img = msg.reshape((80,40))
+            aux_y.append( img )
+            figure(); bwshow(img) ;draw()
+            savefig('img/%s/%s.png' % (dir, sam.pad(N,'0',2)))
+
+    kwargs = dict(N=N, aux_f=aux_f, aux_y=[], verbose=1)
+    Ps, aux_y = marginalize_sumprod(FG, **kwargs)
+
+    # time.sleep(60*60)
+    return FG, Ps, aux_y
 
 if __name__=='__main__':
     
@@ -319,23 +385,32 @@ if __name__=='__main__':
     div('1D')
     if runD:
         tests(K=10, N=50, name='1d', eps=0.09)
-
-
-
         
-    data = loadmat('data/ldpc36-1600.mat')
-    G,H,M = data['G'],data['H'],data['logo']
 
     div('1E')
     if runE:
-        decode_image('calvin.png', 0.08)
+        decode_image('1e', 'calvin.png', 0.08)
 
     div('1F')
     if runF:
-        # higher epsilon
-        decode_image('calvin.png', 0.16)
+        # more noise
+        decode_image('1f', 'calvin.png', 0.16)
 
+
+    div('test')
+    if test:
+        circ = zeros((7,7),dtype=bool)
+        circ[1,3]    =1
+        circ[2,[2,4]]=1
+        circ[3,[1,5]]=1
+        circ[4,[2,4]]=1
+        circ[5,3]    =1
+        bwshow(circ)
+
+    data = loadmat('data/ldpc36-1600.mat')
+    G,H,_ = data['G'],data['H'],data['logo']
 
     div('all tests passed!')
 
-    
+
+#F, Ps, aux_y = decode_image('1e', 'calvin.png', 0.08)
