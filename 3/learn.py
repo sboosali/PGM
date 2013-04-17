@@ -106,7 +106,6 @@ def kalman_smoother(y, A,Q, C,R, x0,V0, EM=False, verbose=False):
         print 'p =', p
         print 'd =', d
         print 'T =', T
-        y = cat(nans((1,p)),y)
 
     if EM:
         T, p = y.shape
@@ -116,40 +115,50 @@ def kalman_smoother(y, A,Q, C,R, x0,V0, EM=False, verbose=False):
 
     # # # # # # # # # # # #
     # Kalman Filter
-    x  = nans((T+1,d))   # x[t] ~ x_{t|t}
-    V  = nans((T+1,d,d)) # V[t] ~ V^{t}_{t}
-    K  = nans((T+1,d,p))
-    _x = nans((T+1,d))
-    _V = nans((T+1,d,d))
+    x  = nans((T,d))   # x[t] ~ x_{t|t}
+    V  = nans((T,d,d)) # V[t] ~ V^{t}_{t}
+    K  = nans((T,d,p))
+    _x = nans((T,d))
+    _V = nans((T,d,d))
+
     x[0] = x0
     V[0] = V0
-
-    for t in range(T):
+    for t in r(1,T-1): # [eg T=4] _,1,2,3
         # time update
-        _x[t+1] = mul(A, x[t]) # x_{t|t} ==> x_{t+1|t}
-        _V[t+1] = mul(A, V[t], tp(A)) + Q
+        _x[t] = mul(A, x[t-1]) # x_{t|t} ==> x_{t+1|t}
+        _V[t] = mul(A, V[t-1], tp(A)) + Q
 
         # measurement update
-        K[t+1] = mul( _V[t+1], tp(C), inv(mul(C, _V[t+1], tp(C)) + R) )
-        err    =  y[t+1] - mul(C, _x[t+1])
-        x[t+1] = _x[t+1] + mul(K[t+1], err) # x_{t+1|t} ==> x_{t+1|t+1}
-        V[t+1] = _V[t+1] - mul(K[t+1], C, _V[t+1]) # next covar not~> data
+        K[t] = mul( _V[t], tp(C), inv(mul(C, _V[t], tp(C)) + R) )
+        err  =  y[t] - mul(C, _x[t])
+        x[t] = _x[t] + mul(K[t], err) # x_{t+1|t} ==> x_{t+1|t+1}
+        V[t] = _V[t] - mul(K[t], C, _V[t]) # next covar not~> data
 
 
     # # # # # # # # # # # #
     # Kalman Smoother
-    m  = nans((T+1,d))   # m[t] ~ x_{t|t-1}
-    S  = nans((T+1,d,d)) # S[t] ~ V^T_{t|t-1}
-    J  = nans((T+1,d,d))
-    m[T] = x[-1] #todo not T?
-    S[T] = V[-1]
-    
-    for t in reversed(range(T)):
+    m  = nans((T,d))   # m[t] ~ x_{t|t-1}
+    S  = nans((T,d,d)) # S[t] ~ V^T_{t|t-1}
+    J  = nans((T,d,d))
+
+    m[-1] = x[-1]
+    S[-1] = V[-1]    
+    for t in reversed(r(0,T-2)): # [eg T=4] 0,1,2,_
         J[t] = mul( V[t], tp(A), inv(_V[t+1]) ) # K J ...
         m[t] = x[t] + mul( J[t], m[t+1] - _x[t+1] )
         S[t] = V[t] + mul( J[t], S[t+1] - _V[t+1], tp(J[t]) )
 
-    if not EM: return x[1:], V[1:], m[:-1], S[:-1] # for consistent notation
+    if verbose:
+        var('x',x)
+        var('V',V)
+        var('_x',_x)
+        var('_V',_V)
+        var('K',K)
+        var('m',m)
+        var('S',S)
+        var('J',J)
+
+    if not EM: return x,V,m,S
 
 
     # # # # # # # # # # # #
@@ -188,43 +197,43 @@ def kalman_smoother(y, A,Q, C,R, x0,V0, EM=False, verbose=False):
 # # # # # # # # # # # # # # # # # # # # # # # # 
 # B
 
-# data = loadmat('data/track.mat')
-# Y = data['Y'].transpose()
-# T, p = Y.shape
+data = loadmat('data/track.mat')
+Y = data['Y'].transpose()
+T, p = Y.shape
 
-# p = 1
-# d = 2
-# sv = 0.1**2
-# sx = 1/3 * sv
-# sy = 20
+p = 1
+d = 2
+sv = 0.1**2
+sx = 1/3 * sv
+sy = 20
 
-# A = a([[1,1],
-#        [0,1]])
-# G = identity(d)
-# Q = a([[sx,0],
-#        [0,sv]])
-# C = a([1,0])
-# C.shape=(p,d)
-# R = a(sy)
-# R.shape=(p,p)
-# x0 = a([0, 1])
-# V0 = identity(d)
+A = a([[1,1],
+       [0,1]])
+G = identity(d)
+Q = a([[sx,0],
+       [0,sv]])
+C = a([1,0])
+C.shape=(p,d)
+R = a(sy)
+R.shape=(p,p)
+x0 = a([0, 1])
+V0 = identity(d)
 
 
-# Xs, Vs, Ms, Ss = kalman_smoother(Y, A,Q, C,R, x0,V0)
+xs, Vs, ms, Ss = kalman_smoother(Y, A,Q, C,R, x0,V0, verbose=1)
 
-# light_green = (0,0.8,0)
-# dark_green  = (0,0.5,0)
+light_green = (0,0.8,0)
+dark_green  = (0,0.5,0)
 
-# positions   = [position for (position,velocity) in Ms]
-# confidences = [2*sqrt(S[0,0]) for S in Ss]
-# plot(Y)
-# errorbar(range(T), positions, yerr=confidences, color=dark_green)
-# print '--- Plot ---'
-# show();time.sleep(60)
+positions   = [position for (position,velocity) in ms]
+confidences = [2*sqrt(S[0,0]) for S in Ss]
+plot(Y)
+errorbar(range(T), positions, yerr=confidences, color=dark_green)
+print '--- Plot ---'
+ion();show();time.sleep(60)
 
-# filtered_positions = [position for (position,velocity) in Xs]
-# smoothed_positions = [position for (position,velocity) in Ms]
+# filtered_positions = [position for (position,velocity) in xs]
+# smoothed_positions = [position for (position,velocity) in ms]
 # plot(Y)
 # plot(filtered_positions, color=light_green)
 # plot(smoothed_positions, color=dark_green)
