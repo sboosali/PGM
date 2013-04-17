@@ -109,13 +109,12 @@ def kalman_smoother(y, A,Q, C,R, x0,V0, EM=False, verbose=False):
 
     if EM:
         T, p = y.shape
-        T = T-1
         d, = x0.shape
  
 
     # # # # # # # # # # # #
     # Kalman Filter
-    x  = nans((T,d))   # x[t] ~ x_{t|t}
+    x  = nans((T,d))   # [zero-based v one-based] x[t] ~ x_{t|t}
     V  = nans((T,d,d)) # V[t] ~ V^{t}_{t}
     K  = nans((T,d,p))
     _x = nans((T,d))
@@ -148,47 +147,47 @@ def kalman_smoother(y, A,Q, C,R, x0,V0, EM=False, verbose=False):
         m[t] = x[t] + mul( J[t], m[t+1] - _x[t+1] )
         S[t] = V[t] + mul( J[t], S[t+1] - _V[t+1], tp(J[t]) )
 
-    if verbose:
-        var('x',x)
-        var('V',V)
-        var('_x',_x)
-        var('_V',_V)
-        var('K',K)
-        var('m',m)
-        var('S',S)
-        var('J',J)
+    # if verbose:
+    #     var('x',x)
+    #     var('V',V)
+    #     var('_x',_x)
+    #     var('_V',_V)
+    #     var('K',K)
+    #     var('m',m)
+    #     var('S',S)
+    #     var('J',J)
 
     if not EM: return x,V,m,S
 
 
     # # # # # # # # # # # #
     # for EM
-    _S = nans((T+1,d,d)) # _S[t] ~ V^{T}_{t,t-1}
-    P  = nans((T+1,d,d)) # P[t] ~ P_{t}
-    _P = nans((T+1,d,d)) # _P[t] ~ P_{t,t-1}
-    _S[T] = mul( (identity(d) - mul(K[T], C)) , A , V[T] )
+    _S = nans((T,d,d)) # _S[t] ~ V^{T}_{t,t-1}
+    P  = nans((T,d,d)) # P[t] ~ P_{t}
+    _P = nans((T,d,d)) # _P[t] ~ P_{t,t-1}
+    _S[-1] = mul( (identity(d) - mul(K[-1], C)) , A , V[-1] )
 
-    #print 'm =', m
-    for t in reversed(r(2,T-1)):
-        _S[t] = mul(V[t], tp(J[t-1])) + mul(J[t], (_S[t+1] - mul(A,V[t])), tp(J[t-1]))
-    for t in reversed(r(2,T)):
-        _P[t] = _S[t] + mul(m[t], m[t-1])
-    for t in reversed(r(1,T)):
+    for t in reversed(r(0,T-1)):
         P [t] =  S[t] + mul(m[t], m[t])
+    for t in reversed(r(1,T-2)):
+        _S[t] = mul(V[t], tp(J[t-1])) + mul(J[t], (_S[t+1] - mul(A,V[t])), tp(J[t-1]))
+    for t in reversed(r(1,T-1)):
+        _P[t] = _S[t] + mul(m[t], m[t-1])
 
     if verbose:
-        var('x',x)
-        var('V',V)
-        var('_x',_x)
-        var('_V',_V)
-        var('K',K)
-        var('m',m)
-        var('S',S)
-        var('J',J)
-        var('P',P)
-        var('_P',_P)
-        var('_S',_S)
-    
+        var('y',(y[0],y[-1],y.shape))
+        var('x',(x[0],x[-1],x.shape))
+        var('V',(V[0],V[-1],V.shape))
+        var('_x',(_x[0],_x[-1],_x.shape))
+        var('_V',(_V[0],_V[-1],_V.shape))
+        var('K',(K[0],K[-1],K.shape))
+        var('m',(m[0],m[-1],m.shape))
+        var('S',(S[0],S[-1],S.shape))
+        var('J',(J[0],J[-1],J.shape))
+        var('P',(P[0],P[-1],P.shape))
+        var('_P',(_P[0],_P[-1],_P.shape))
+        var('_S',(_S[0],_S[-1],_S.shape))
+        
     # m,P,P_ for E step
     # _x,_V for mll (my derivation needs the kalman filter's time (not measurement) update)
     if EM: return m, P, _P,  _x, _V
@@ -197,40 +196,40 @@ def kalman_smoother(y, A,Q, C,R, x0,V0, EM=False, verbose=False):
 # # # # # # # # # # # # # # # # # # # # # # # # 
 # B
 
-data = loadmat('data/track.mat')
-Y = data['Y'].transpose()
-T, p = Y.shape
+# data = loadmat('data/track.mat')
+# Y = data['Y'].transpose()
+# T, p = Y.shape
 
-p = 1
-d = 2
-sv = 0.1**2
-sx = 1/3 * sv
-sy = 20
+# p = 1
+# d = 2
+# sv = 0.1**2
+# sx = 1/3 * sv
+# sy = 20
 
-A = a([[1,1],
-       [0,1]])
-G = identity(d)
-Q = a([[sx,0],
-       [0,sv]])
-C = a([1,0])
-C.shape=(p,d)
-R = a(sy)
-R.shape=(p,p)
-x0 = a([0, 1])
-V0 = identity(d)
+# A = a([[1,1],
+#        [0,1]])
+# G = identity(d)
+# Q = a([[sx,0],
+#        [0,sv]])
+# C = a([1,0])
+# C.shape=(p,d)
+# R = a(sy)
+# R.shape=(p,p)
+# x0 = a([0, 1])
+# V0 = identity(d)
 
 
-xs, Vs, ms, Ss = kalman_smoother(Y, A,Q, C,R, x0,V0, verbose=1)
+# xs, Vs, ms, Ss = kalman_smoother(Y, A,Q, C,R, x0,V0, verbose=1)
 
-light_green = (0,0.8,0)
-dark_green  = (0,0.5,0)
+# light_green = (0,0.8,0)
+# dark_green  = (0,0.5,0)
 
-positions   = [position for (position,velocity) in ms]
-confidences = [2*sqrt(S[0,0]) for S in Ss]
-plot(Y)
-errorbar(range(T), positions, yerr=confidences, color=dark_green)
-print '--- Plot ---'
-ion();show();time.sleep(60)
+# positions   = [position for (position,velocity) in ms]
+# confidences = [2*sqrt(S[0,0]) for S in Ss]
+# plot(Y)
+# errorbar(range(T), positions, yerr=confidences, color=dark_green)
+# print '--- Plot ---'
+# ion();show();time.sleep(60)
 
 # filtered_positions = [position for (position,velocity) in xs]
 # smoothed_positions = [position for (position,velocity) in ms]
@@ -257,10 +256,7 @@ def marginal_log_likelihood(y, A,Q,C,R, _x,_P):
 
     if True: return 0
 
-    y  =  y[1:]
     T,p = y.shape
-    # _x = _x[1:]
-    # _P = _P[1:]
     _,d = _x.shape
     Cy = mul(inv(C), tp(y))
     CRC = inv(mul(tp(C),inv(R),C))
@@ -297,7 +293,6 @@ def EM(y, d=None, A=None,Q=None,C=None,R=None, x1=None,P1=None, I=100, verbose=F
     # dims
     T, p = y.shape
     d = int(d) ; assert d>0
-    y = cat(nans((1,p)),y)
     # params
     if A is None: A = identity(d)
     if Q is None: Q = identity(d)
@@ -317,10 +312,10 @@ def EM(y, d=None, A=None,Q=None,C=None,R=None, x1=None,P1=None, I=100, verbose=F
 
         # E step
         print '-- E %d --' % i
-        x,P,_P, time_x,time_P = kalman_smoother(y, A,Q, C,R, x1,P1, EM=True, verbose= verbose and i==I)
+        m,P,_P, time_x,time_P = kalman_smoother(y, A,Q, C,R, x1,P1, EM=True, verbose= verbose and i==I)
 
-        # print 'x P _P'
-        # print x
+        # print 'm P _P'
+        # print m
         # print P
         # print _P
 
@@ -332,11 +327,11 @@ def EM(y, d=None, A=None,Q=None,C=None,R=None, x1=None,P1=None, I=100, verbose=F
 
         # M step
         print '-- M %d --' % i
-        A = sum(_P[t] for t in r(2,T)) * inv(sum(P[t-1] for t in r(2,T)))
-        Q = 1/(T-1) * (sum(P[t] for t in r(2,T)) - mul(A, sum(tp(_P[t]) for t in r(2,T))))
-        R = 1/T * sum(dot(y[t],y[t]) - mul(C, x[t], y[t]) for t in r(1,T))
-        x1 = x[1]
-        P1 = P[1] - dot(x[1],x[1])
+        A = sum(_P[t] for t in r(1,T-1)) * inv(sum(P[t-1] for t in r(1,T-1)))
+        Q = (1/(T-1)) * ( sum(P[t] for t in r(1,T-1)) - mul(A, sum(tp(_P[t]) for t in r(1,T-1))) )
+        R = (1/T) * sum( dot(y[t],y[t]) - mul(C, m[t], y[t]) for t in r(0,T-1) )
+        x1 = m[0]
+        P1 = P[0] - dot(m[0],m[0])
   
         # print 'A Q R'
         # print A
@@ -415,7 +410,7 @@ R = identity(p)
 x1 = zeros(d)
 P1 = identity(d)
 
-A,Q,R = EM(Y, d=d, A=A,Q=Q,C=C,R=R, x1=x1,P1=P1, I=10, verbose=False)
+A,Q,R = EM(Y, d=d, A=A,Q=Q,C=C,R=R, x1=x1,P1=P1, I=1, verbose=True)
 _, _, ms, Ss = kalman_smoother(Y, A,Q, C,R, x1,P1)
 
 var('ms',ms)
