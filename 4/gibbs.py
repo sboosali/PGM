@@ -7,14 +7,20 @@ import numpy.random as sample
 import scipy.stats as pdfs
 
 from collections import defaultdict
+from scipy.io import loadmat
 
-from sam.sam import *
+import sam.sam as sam
 from util import *
+
+save = 1
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
 # 1C
 
-def gibbs(y, N=None,K=None,alpha=1, iters=500, burnin=0, skip=0):
+def gibbs(y,
+          N=None,K=None,alpha=1,
+          iters=500,burnin=0,skip=0,
+          truth=None):
     """
     gibbs sampling for a stochastic block model
     
@@ -42,8 +48,10 @@ def gibbs(y, N=None,K=None,alpha=1, iters=500, burnin=0, skip=0):
     print '--- Gibbs Sampling ---'
     assert N and K
     assert 0 <= burnin < iters and 0 <= skip < iters
+    assert truth is not None
     N2 = N**2 - N
-    probs = nans(iters)
+    probs, rands = nans(iters), nans(iters)
+    true_z = truth
 
     # Init: sample from priors
     # dirichlet prior
@@ -75,18 +83,16 @@ def gibbs(y, N=None,K=None,alpha=1, iters=500, burnin=0, skip=0):
         for (k,l) in cross(K,K):
             Ykl = array([y[i,j] for (i,j) in cross(N,N)
                          if i!=j and y[i,j]!=nan and z[i]==k and z[j]==l])
-            h[k,l] += sum(Ykl==0)
-            t[k,l] += sum(Ykl==1)
+            h[k,l] += sum(Ykl==1)
+            t[k,l] += sum(Ykl==0)
         W_ = sample.beta(h,t, size=(K,K))
 
         #print z
         for i in xrange(N):
             zP = array([pi[k]
-                        * prod([W[k,z[j]] if y[i,j] else 1-W[k,z[j]]
-                                for j in xrange(N)
+                        * prod([abs(1-y[i,j]-W[k,z[j]]) for j in xrange(N)
                                 if j!=i and y[i,j]!=nan])
-                        * prod([W[z[j],k] if y[j,i] else 1-W[z[j],k]
-                                for j in xrange(N)
+                        * prod([abs(1-y[j,i]-W[z[j],k]) for j in xrange(N)
                                 if j!=i and y[j,i]!=nan])
                         for k in xrange(K)]) # z[i]=k
             zP /= sum(zP)
@@ -99,26 +105,36 @@ def gibbs(y, N=None,K=None,alpha=1, iters=500, burnin=0, skip=0):
         pis.append(pi)
         Ws.append(W)
         zs.append(z)
+
         # compute log-probability; should (non-monotonically) increase
-        Ber = sum(log(W[z[i],z[j]] if y[i,j] else 1-W[z[i],z[j]])
+        Ber = sum(log(abs(1-y[i,j]-W[z[i],z[j]]))
                   for (i,j) in cross(N,N) if i!=j and y[i,j]!=nan)
         Cat = sum(log(pi[z[i]]) for i in range(N))
         Dir = sum((alpha[k]-1) * log(pi[k])
                   for k in xrange(K)) - log_Beta(alpha)
         probs[it] = Ber + Cat + Dir
 
-    return pis,zs,Ws, probs
+        # compute rand_index by samples
+        rands[it] = rand_index(true_z, z)
 
+    return pis,zs,Ws, probs,rands
+
+
+def estimate_z(zs,K):
+    iters,N = zs.shape
+    return array([max(range(K), key=lambda k: sum(zs[:,i]==k))
+                  for i in range(N)])
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
-# 2D
+# 1D
+
+# here "x_" means "estimated/learned/inferred x"
 
 N = 30
 K = 3
 W = nans((K,K))
 for (k,l) in cross(K,K):
     W[k,l] = 0.10 if k==l else 0.95
-#z = numpy.random.permutation([0]*int(N/K) + [1]*int(N/K) + [2]*int(N/K))
 z = array([0]*int(N/K) + [1]*int(N/K) + [2]*int(N/K))
 pi = array([sum(z==k)/N for k in range(K)])
 y = nans((N,N))
@@ -126,39 +142,34 @@ for (i,j) in cross(N,N):
     if i==j: continue
     y[i,j] = bernoulli(W[z[i],z[j]])
 
-# here "x_" means "estimated/learned/inferred x"
 iters = 500
-runs = 1
-burnin = int(iters*4/5)
+runs = 5
+burnin = int(iters/5)
 skip = 0
 
+probs_figure = figure().number
+rands_figure = figure().number ; ylim(0,1)
 pis, zs, Ws = [],[],[]
 probs = [-inf for _ in range(iters)]
 for t in xrange(runs):
     print
-    print '=== Run %d ===' % t
-    pis_, zs_, Ws_, probs_ = gibbs(y, N=N,K=K, iters=iters)
+    print '=== Run %d ===' % (t+1)
+    pis_,zs_,Ws_, probs_,rands_ = gibbs(y, N=N,K=K, iters=iters, truth=z)
+    figure(probs_figure); plot(probs_)
+    figure(rands_figure); plot(rands_)
     if mean(probs_[burnin:]) > mean(probs[burnin:]):
-        pis, zs, Ws, probs = pis_, zs_, Ws_, probs_
-    plot(probs) # same fig
+        pis, zs, Ws = pis_, zs_, Ws_
 
-pi_ = sum(pis[_] for _ in range(iters))/iters
-W_ = sum(Ws[_] for _ in range(iters))/iters
+mixing_figure = figure().number
 zs = array(zs)
-z_ = array([max(range(K), key=lambda k: sum(zs[burnin:,i]==k))
-            for i in range(N)])
+imshow(zs.T, interpolation='nearest') # color
+axes().get_xaxis().set_ticks([1, iters])
+axes().get_yaxis().set_ticks([0, N-1])
+xlabel('iterations') ; ylabel('N')
 
-print
-print
-print 'true z'
-print z
-print
-print 'gibbs z'
-print z_
-print
-print 'true z == gibbs z'
-print '(%.3f is chance)' % (1/K)
-print '%d / %d' % (sum(z==z_), N)
+pi_ = sum(pis[_] for _ in range(burnin,iters))/iters
+W_ = sum(Ws[_] for _ in range(burnin,iters))/iters
+z_ = estimate_z(zs[burnin:],K)
 
 print
 print
@@ -176,11 +187,52 @@ print
 print 'gibbs W'
 print W_
 
-ion();show();time.sleep(60)
+print
+print
+print 'true z == gibbs z'
+print 'rand index = %.2f' % (rand_index(z,z_))
 
-
-# # # # # # # # # # # # # # # # # # # # # # # # # # # # 
-# 1D
+show();exit()
+ 
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
 # 1E
+
+data = loadmat('data/sampson_network.mat')
+y = data['graph']
+z = data['monk_factions'].flatten()-1 # numpify
+N,_ = y.shape
+K=4
+
+iters = 500
+runs = 5
+burnin = int(iters/5)
+skip = 0
+
+probs_figure = figure().number
+rands_figure = figure().number ; ylim(0,1)
+pis, zs, Ws = [],[],[]
+probs = [-inf for _ in range(iters)]
+for t in xrange(runs):
+    print
+    print '=== Run %d ===' % (t+1)
+    pis_,zs_,Ws_, probs_,rands_ = gibbs(y, N=N,K=K, iters=iters, truth=z)
+    figure(probs_figure); plot(probs_)
+    figure(rands_figure); plot(rands_)
+    if mean(probs_[burnin:]) > mean(probs[burnin:]):
+        pis, zs, Ws = pis_, zs_, Ws_
+
+mixing_figure = figure().number
+zs = array(zs)
+imshow(zs.T, interpolation='nearest') # color
+axes().get_xaxis().set_ticks([1, iters])
+axes().get_yaxis().set_ticks([0, N-1])
+xlabel('iterations') ; ylabel('N')
+
+z_ = estimate_z(zs[burnin:],K)
+
+print 'true z == gibbs z'
+print 'rand index = %.2f' % (rand_index(z,z_))
+
+show();exit()
+
