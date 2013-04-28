@@ -51,7 +51,7 @@ def bwshow(bool_matrix):
 
 def Ber(x,p): return p if x else 1-p
 
-def show():
+def show(save=True):
     if save:
         plt.show()
     else:
@@ -80,3 +80,4 @@ def rand_index(x,x_):
     return (both_same + both_diff) / C(N,2)
 
 #rand_index(['a','b','b','c','c','b'],['c','a','a','b','b','c'])
+
