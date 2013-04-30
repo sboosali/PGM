@@ -54,7 +54,7 @@ def particle_filter(Y, initial, sample, weigh, L):
     weights <== weigh _ _
     resample from multinomial(particles, weights)
 
-    y , data
+    Y , data : stream
 
     initial
     can sample
@@ -77,7 +77,6 @@ def particle_filter(Y, initial, sample, weigh, L):
     X[t,l,d]
     """
 
-    T, p = Y.shape
     d = initial().shape
 
     print '--- Particle Filter ---'
