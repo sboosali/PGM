@@ -2,12 +2,52 @@ Polyphonic Transcription by Heuristic Inference
 
 presentation/article due may 7
 
+polytransinf
+> particle filter that samples from likelihood
+ sample x[t] from P(x[t]|y[t]) => weight by P(x[t]|x[t-1])
+> sparse approximation
+ keep K[=subspace] most likely notes from heuristic of audio
+> greedy search
+ choose most likely b[=breadth] notes => subtract audio from signal d[=depth] times
+ A* ?
+~ h(y)
+ = data => deterministic efficient function => list states
+ : heuristic
+ > sort notes by energy of fundamental
+ > sort notes by value from nmf
+test
+ agree with exact inference [eg max-product forward-backward] on subset [eg 2^12 not 2^88]
+
+graphical model for polyphonic transcription
+the graph
+ factorial HMM
+ shrink space by sparsity
+the inference
+ approx
+the learning
+ model noise and create noised audio
+ learn stickiness etc
+
+-  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+particle filter ~>
+p : P
+q : P
+p* ∝ p : can eval
+q* ∝ q : can eval : can sample
+K = |particles|
+
+weight of particle filter , w[k][t]
+= f(x[t]|x[t-1]) * g(y[t]|x[t]) / q(x[t]|x[t-1],y[t])
+q = g -> w = f
+f = ∏ Ber
+g = heuristic = fft | nmf | search
+
+approx on space ~ exact on subspace
+
 google scholar . polyphonic transcription cemgil
 
 gd, nmf, particle filter, neural network  on  sam-gen notes-sounds
-
--  -  -  -  -  -  -  -  -  -  -  -  -  -  -
-ideas
 
 models
 sumproduct
@@ -23,7 +63,6 @@ metropolis-hastings sampling
 gibbs sampling
 variational ??
 
-
 noise
 . this is it, i can fuckin feelit!
 <~ P(y[t] | x[t])
@@ -31,16 +70,11 @@ noise
 : chi-squared
 : noncentral chi-squared
 
-
 new
 greedy
 lateral inhibition
 shrink space
 ADSR
-
-
-learning
-how the hell do i do learning on this gmod?
 
 seed _ with GD / NMF
 
@@ -56,85 +90,12 @@ next-or-stay cycle transition matrix
  S   0   0   s   1-s
  R   1-r 0   0   r ]
 
+notes in chord  are conditionally independent  given prev chord and sparsity
 
-lateral inhibition
-must be continuous
-y' interpretation
-additive | multiplicative 
-~> noise model
-x' interpretation
- x ∈ {0 1}^88
- x' ∈ R^88
- y ∈ R^1024
- what if deterministic? nope
-  p(x'[t] | x[t]) => x'[t] == f(x[t])
-  invert f if can
- p(y[t] | x'[t]) p(x'[t] | x[t]) p(x[t] | x[t-1])
-  black box away x' by _ ->  reduces to HMM  ?
-   marginalization [which elims vars] is too hard
-   gibbs
-
-
-
-
-HMM
-p(x[t] | y[t]) ∝ p(y[t] | x[t]) p(x[t] | x[t-1])
-sample from p(x[t] | x[t-1])
-weight by p(y[t] | x[t])
-good for 1=>1 1=>0 0=>0
-bad for 0=>1
-the asymmetry, both the good and the bad, is by sparsity of 1s
-silence can go to any sound, to many sounds, so which?
-
-
-
-
-init / x[0] is empty / zeros / silent  ?->  + sparsity forall x[t]
-
-x[t]
-: continuous
-in [0,1]^88
- find min,max,mean energies of signal prefix
- only normalize if audio freqs are all the same (ie zero)
-  or normalzie to the degree which it coincides
-
-y ==> lateral inhibition  ~  mcts  ~  sample x[t] from P(x[t]|y[t]) not P(x[t]|x[t-1])
-
-[old] lateral inhibition
- preprocess audio
- -> P(x[t,i] | x[t-1,i] , x[t-1,j] where j ∈ overtones(i) , x[t-1,k] where k ∈ neighbors(i))
- -> - space
- -> - false positives
- . if you hear a note, its overtones[? nearby] are less likely
- . the transition lowers the probability of a soft overtone note given a loud fundamental note. but you can still get octaves, ifths, etc if the emission is strong.
- . only transition -> no octaves -> false negatives
- . only emission -> yes shadows -> false positives
- . either learns params after seeding with (or just set to) the nontrivial overtones of each note
-noise params
-
-
-
-model
-|samples per moment| = ??
-|moments per what| = ??
-
-
-
-second if probability is unnormalized reciprocal search length?
-then its a probability technically-syntactically but not meaningfully-semantically. if you cant interpret it anyway, just do a regularized function approximation.
-A* search over continue melody or chord progression
-greedy
-linearizes exponential
-sample |notes| => sample one next note given all curr notes => samples until you get |notes| notes
- notes in chord  are conditionally independent  given prev chord and sparsity
-init silence ~ sparsity
- src cemgil
-
-greedy
-humans probably do something greedy. like parsing natlang? 
-guess some note (eg whose fundamental is the loudest frequency the signal) => subtract it (i.e. note = fundamental + overtones + under?tones) from signal => rinse and repeat
  monte carlo tree search  would be  do this for several start notes, say top[by some "likely for note in be in signal" metric, probably fundamental loudness] two notes, each time, exponential growth but small base[≈ number of likely notes; not possible notes, which would be 88 for piano] and small exponent[≈ depth of search, after you take away enough notes [below 5, i think], you can do forward-backward HMM].
+
  solving this problem is like biasing the search / reranking the notes / shrinking the space by some heuristic; then it does exact inference on the "likely ones" or subsets and stops before trying everything.
+
  avoid recomputation, which are likely, since we do the "most likely" then the "next most likely". so like sampling without replacement.
   eg 7 notes
    rem F# => rem C  =  rem C => rem F#
@@ -146,51 +107,18 @@ guess some note (eg whose fundamental is the loudest frequency the signal) => su
  top k ~ sample k
   instead of deterministically taking the k loudest fundamentals, we might take k samples from some distribution on notes given the audio[eg the fundamentals] . isnt this worse? not strictly, because we do sacrifice exploitation for more exploration
 
-shrink space
-sparsity
+shrink space by sparsity
+eg n=88 k=10
  2^88 => 88 C 10
-  still too big
-  doesnt scale to multiple instruments  ie  k=10 is small and sensible but n=88 cant model bands
-locality
- 88 C 10 => ??
-greedy
+ . still too big <- doesnt scale to multiple instruments
+ . k=10 is sensible but n=88 cant model bands
 
-
-
-P(x[t,f] | x[t-1,f]) => P(x[t,f] | x[t-1,:])
- means note can depend on any prev note
- good. allows music priors
- bad. explodes space
- -> lateral inhibition
-
-
-polytrans ~ particle filter
-p : P
-q : P
-p* : can eval
-q* : can eval : can sample
-
-
-
-what if, instead of sampling from the transition/dynamic P(x[t] | x[t-1]) and weighting by the emission/measurement P(x[t] | y[t]), you sample from the emissiono and weight by the transition! that seems to be more what humans do. e.g. hear some sound, think it could sound like one of a several different notes/intervals/chords, figureout which is most likely given previous melody/harmony. the samples arent "chained" anymore [i.e.  x[t+1] ~> x[t] ~> x[t-1]  =>  x[t] ~> y[t] ... ], but still dependent. [must be chained for stickiness, ADSR transitions]
-is this called something else? is this ok? what about both, or cant we mix particles like that?
-
-what if, the dynamics [ie x[t,i] ~> x[t-1, :]] dont really matter. what if its just the measurement [ie x[t,i] ~> y[t,:]] and the ADSR [ie x[t, i] ~> x[t-1, i]]that can infer the right notes. this is like saying "less music theory, more signal processing" or "local not global" or "y[t] does not quite disambiguate x[t], which is why it's an HMM, but it does really constrains it". 
-isnt this what cemgil says?
-
-
-put more signal processing / noise model / etc in P(x[t] | y[t])
-its about samples, not seconds. its about ADSR, not music theory. humans (with perfect pitch) can figure out what several notes were all played within a second [is this true?]. 
-
-ADSR
-cant model legato/vibrato
- src cemgil
-
-prob? loud base and soft overtone
+prob. loud base and soft overtone
  eg loud A2 . soft E3 . E3 is the loudest overtone of A2
 soln. look at the overtone's overtones
  do does a fundamental share many overtones with its own overtones? probably
-
+soln. reweight audio energy by human perception
+ . humans are less sensitive to bass so it might dominate the audio while the treble dominates the music, so a false negative will be obviously wrong
 
 eval / test / compare / results
 compare just emissions  to emissions and transitions
@@ -219,9 +147,8 @@ accuracy
   check for wrong notes [not transposes] . ie big false positives . big problem with the model or too much noise that isnt being dealt with
   check that the notes are not transposed . which would mean a problem in the basis . ie misspecified, linearly dependent, etc
   look for other things
-  check that its not obviously better at bass over clef . which means i might need to logarithmically rescale energies to the sensitivity of the human ear
+  check that its not obviously better at bass over treble . which means i might need to logarithmically rescale energies to the sensitivity of the human ear
   check that its not missing short notes . i might need to shrink the window size or tune the difference between noise and short notes [hopefully noise is much briefer]
-
 
 real  v  midi
 more noise
@@ -235,15 +162,3 @@ diff notes
   -> more varied attack
   ? -> more varied dynamics
   ? -> more varied rhythm
- 
-
-graphical model for polyphonic transcription
-the graph
- shrink space
- sparsity
-the inference
-the learning
- model noise and create noised audio
- learn stickiness etc
-
-
