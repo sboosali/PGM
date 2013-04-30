@@ -74,31 +74,31 @@ def particle_filter(Y, initial, sample, weigh, L):
 
     output X
     T lists of L particles with d dimensions
-     """
+    X[t,l,d]
+    """
 
     T, p = Y.shape
     d = initial().shape
-    X = nans((T+1,L,d))
 
     print '--- Particle Filter ---'
     print 'p =', p
     print 'd =', d
     print 'L =', L
 
-    X[0] = [initial() for _ in range(L)]
+    X = [initial() for _ in range(L)]
 
-    for t in range(1,T):
+    for y in Y:
         # sample
-        particles = a([sample(Y) for l in range(L)])
+        particles = a([sample(y) for _ in range(L)])
 
         # weigh
-        weights = a([weigh(X[t-1], particle) for particle in particles])
+        weights = a([weigh(X, particle) for particle in particles])
         weights /= sum(weights)
       
         # resample
-        X[t] = [multinomial(particles, weights) for l in range(L)]
+        X = [multinomial(particles, weights) for _ in range(L)]
 
-    return X
+        yield X
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # Test
