@@ -1,0 +1,338 @@
+-  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+.proposal
+
+either
+new GM
+new algorithm
+new data
+
+    Identify a graphical model suitable for a new application area, and explore baseline learning algorithms
+    Propose, develop, and experimentally test a new type of learning algorithm for some existing graphical model
+    Experimentally compare different models or algorithms on an interesting, novel dataset
+
+proposal
+1..3pg
+use the NIPS LaTeX style file
+why this problem?
+what's new? what's out there? (3 papers)
+how to eval?
+what's the plan?
+what's the GM
+
+    A clear description of the problem or application you intend to address. Why is it worth studying?
+    A discussion of related work, including references to at least three relevant research articles. Which aspects of your project are novel?
+    An experimental evaluation protocol. How will you know that you've succeeded?
+    A concrete plan for accomplishing your project by the end of the course. What are the biggest challenges?
+    A figure illustrating a graphical model which plays a role in your project. We recommend creating such figures in a vector drawing program, such as Adobe Illustrator, Inkscape, or Xfig.
+
+
+
+
+
+
+
+\section*{The Problem}
+
+The project I am proposing is on the polyphonic transcription problem: given some audio, and some basis of notes, what notes were played at what times and (if continuous) how loud. The difficulty and structure of just the monophonic problem is analogous to speech-to-text; i.e. inverting a hard-to-invert function against noise. Polyphonic transcription is more challenging than monophonic, as there is combinatorial explosion in the state space; but more powerful as it models not just simple melodies but intervals, chords, textures, harmonies, multiple melodies from different instruments; and with the right basis, all of any song, piece, or sound. The increased challenges come from notes that sound alike (e.g. whose representations are not linearly independent), and noise that further distances the audio from a linear function of the notes (e.g. with enough noise in a few places, without context, one note will then sound like another).
+
+Solving this problem would change the way we create and experience music. It has many applications. Alignment: align audio to text by initializing/augmenting manual annotation with the output of polyphonic transcription. Music search: once aligned, we can use content based retrieval in very large digital audio databases (Tzanetakis, 2002). Composition: a musician can improvise, get lost in flow for an hour, and the polyphonic transcription remembers everything they created, even if they forgot. Futuristic: simulate absolute pitch. Composition: interactive music performance systems (Rowe, 2001). Teaching: transcribe audio heard into notes played and compare to the sheet music, to see if student played right notes while practicing, without a teacher needing to listen. And many more.
+
+
+
+
+
+
+
+
+\section*{Solutions in the Literature}
+
+The most cited article on "polyphonic transcription" uses non-negative matrix factorization (= NMF) [3]. The motivation is that some audio (= B : |frequencies| by |windows|) is synthesized from a basis (= A : |frequencies| by |notes|) and some notes (= X : |notes| by |windows|), or $AX=B$ in math. First, after noise, this can only be approximated by $AX \approx B$. Second, since these matrices are rectangular, there is no perfect unique inverse $X ≈ A^{+}B$. Third, observe that everything is nonnegative, as neither negative notes nor negative sound has any physical interpretation. In my experiments, NMF (with multiplicative update) is much faster but outputs equivalent results to gradient descent (with additive update). NMF works well on midi-synthesized (so noiseless, consistent basis) audio (e.g. perfectly transcribing a bach fugue). however, it has three problems: one, it can't be easily extended with domain-specific knowledge of music, as everything is linear algebra (e.g. no sparsity prior that says "only a few notes are played at a time"); two, it is global and depends on the whole audio, thus not online, although running NMF on prefixes or composing it across a sliding window can work; third, it fails really badly on real data (e.g. myself playing an etude with many notes, on an off-tune piano, with heavy pedal, recorded on a phone), even with the right basis (e.g. I recorded each note from that piano).
+
+A more probabilistic attempt at polyphonic transcription is a graphical model, often some HMM or a generalization thereof. For example, [2] uses a switching state space model with a kalman filter. The model, learning, and inference is more complex than NMF and they published no code, so I didn't try to reproduce it; and they showed only few and small transcriptions; so I can't say whether it works well. 
+
+
+
+
+
+
+
+\section*{Contribution of my Solution}
+
+My contribution is a faster approximate inference algorithm that exploits the sparsity in the problem. In practice, polyphony means only a few notes, sometimes several, are ever heard at once. The motivation is twofold. One, signal processing dominates music theory (or local versus global, or lower-level versus higher-level) in transcription. Thus, the dependence between notes (on the timeframe of hundreds of milliseconds) can be safely assumed to be weak or null, which is what cemgil does in his factorial HMM. Two, the transitions are low-dimensional, and only promote stickiness. For example, let's take apart the stickiness (let "0=>1" mean silence to sound, etc): "1=>1" is true for most notes most of the time, thus high probability; "1=>1" is also very high, hence stickiness, and "1=>0" is lower but makes sense as "any note must turn off with enough time"; however, "0=>1" says "this note should turn on" but why this note, rather than any other note? music theory would answer that, but it doesn't seem necessary to complicate the model for something that won't help. Empirically, someone with absolute pitch and musical training people can transcribe several notes from unfamiliar chords they hear briefly (naturally, accuracy does increase with familiar sounds and a longer stimulus). Now, let us set x_0 to all zeros, which is naturally intepreted as "every song starts with silence". Let us invoke the generative model: if we begin sampling, which notes should be played? why those notes? it doesn't say. Thus, my intuition is that it is $p(y_t | x_t)$ that is much more informative for $x_t$ than $p(x_t | x_{t-1})$. I think it will outperform a particle filter, as "sample from the transition, then weight by the emission" may have it backwards. And unlike a kalman filter, like Cemgil, there is no need to make everything linear and gaussian.
+
+What I want to do is use search. The algorithm is: given some heuristic (e.g. the notes whose fundamentals are  the loudest frequencies in the signal are mostly likely; this function is cheap and fast), pick the note most likely to be in the audio, pick a loudness (e.g. such that the fundmantal won't be louder than the generated audio), generate audio from the note (e.g. loudness times [0 .. 1 .. 0] dot its timbre), and subtract it from the signal. This shrinks the space because now the signal has less in it. The search tree's breadth is how many notes we want to guess/sample we want, and the depth is how many notes may be in the audio. Assuming depth first search for now, the search size is linear in space and exponential in time (wrt the number of notes). One optimization is to avoid subtracting the same notes in a different order (e.g. "C => F# => ..." and then "F# => C => ...") as addition commutes. Generally, greedy search linearizes an exponential space; here, I am only searching the subset of the space that is probably where the true states are, as sparsity keeps the exponent low (e.g. 10^5 is not too bad, and this means trying 10 notes at a time (which out of 88 notes is a wide search) for a signal with 5 notes (which is rare)). One problem is that by only subtracting the notes, the noise stays, and builds up. Given that, if I have time, I want to bring back probability, with monte carlo tree search, where the actions are which note to subtract. Sample from a distribution $p(x_{t,i} | y_t)$ that asks "how likely is note $i$ to be in the signal?". An optimization may be starting the breadth high, then decreasing it as there are fewer notes. Conversely, maybe we want to start low and grow as the noise builds up and makes things look similar. 
+
+After the search has output several "samples" of x_t given y_t, we can weigh them by some function of the x_{t-1} particles (e.g. the empirical expectation or $\sum_{l=0}^{|particles|} p(x_t|x^{(l)}_{t-1}) w^{(l)}$), and keep the best fits. (Maybe I could parallel the particle filter even more, by resampling for example, but since I have no theoretical justification for this, it may help or hurt). Thus, I want to "swap" the particle filter algorithm to "sample up from the emission, weigh by the transition". 
+
+
+
+\section*{Evaluation}
+
+To test the inference absolutely, there are two datasets to use: MIDI and live. The MIDI data is automatically computer-generated, and thus cheap and infinite. The live data is audio played by humans, recorded in what may be a noisy environment (e.g. download youtube videos). The audio must be manually aligned to the score at the right times. It is hard to make and finite. To test the inference relatively, if I have time, I will compare it to the particle filter from which it is inspired. To discover how informative the "stickiness" of the HMM is, I will compare my inference algorithm with weighting by the transitions to just independently sampling from / searching through the emissions (i.e. compare "just emissions" to "both emissions and transitions"). However, this real data is necessary as it is harder to transcribe for many reasons: more nosie, more variance, more notes. First, the noise comes from a noisy room and low-quality recorder. Second, the variance comes from a human playing, with more varied dynamics, more varied attack, and different pianos all create model misspecifications (the note transcribed is different from the note played). Third, for both datasets, there are more notes at the same time in faster music and sustains (e.g. with the pedal on, for a piano), which makes the audio "more polyphonic" and thus exponentially harder.
+
+An objective/automatic evaluation is to diff the binary matrices (where the columns are moments in time and the rows are notes), i.e. the outputted notes verus the true notes. you could also count the number of notes by horizontal flood fill. I will also conduct a more subjective/manual evaluation, to look for several things that could go wrong (and have gone wrong in other models), and to watch out for new problems: if there are ``holes'' (i.e. ``small'' false negatives), the transitions may not be sticky enough; if entire notes are missing (i.e. big false negatives), the sparsity may be too strong (among other things); if ther are ``dots'' (i.e. small false positives) or long wrong notes (i.e. big false positives), there may be too much noise that isn't being handled correctly (possibly ``transposing'' the audio); if notes are transposed (e.g. a D3 or an A3 or a D\#4 from time 1 second to 2 seconds where there should be a D\#3), maybe the basis is misspecified (i.e. linearly dependent) or maybe the overtones are being misinterpreted as their own fundamentals; if the bass is much better than the clef, I might need to logarithmically rescale energies to the sensitivity of the human ear [1]; if short notes are missing, the window size might need to shrink or the model's distinction between noise and short notes must be tuned (hopefully noise is empirically much briefer).
+
+This pipeline extracts a ``piano roll'' and synthesizes audio from the midi; then adds noise (possibly from some noise model like chi-squared samples, or something empirical like recordings from a noisy room, permuting it to multiply the number of different "noises"); and finally compares true notes of input to inferred notes of output (as above).
+
+
+
+
+\section*{Graphical Model}
+
+An epigraph, where $x_{t,i}\in\{0,1\}$ means note $i$ is on at at time $t$ and $y_t\in \mathbf{R}^{|windows|}$ 
+
+\begin{center}
+\begin{tikzpicture}[scale=0.2]
+\tikzstyle{every node}+=[inner sep=0pt]
+\draw [black] (46.7,-39) circle (3);
+\draw (46.7,-39) node {$y_t$};
+\draw [black] (51.8,-22.3) circle (3);
+\draw (51.8,-22.3) node {$x_{t,k}$};
+\draw [black] (46.7,-26.7) circle (3);
+\draw (46.7,-26.7) node {$x_{t,j}$};
+\draw [black] (41.3,-30.6) circle (3);
+\draw (41.3,-30.6) node {$x_{t,i}$};
+\draw [black] (29.3,-26.7) circle (3);
+\draw (29.3,-26.7) node {$x_{t-1,i}$};
+\draw [black] (32.6,-21.4) circle (3);
+\draw (32.6,-21.4) node {$x_{t-1,j}$};
+\draw [black] (35.9,-15.7) circle (3);
+\draw (35.9,-15.7) node {$x_{t-1,k}$};
+\draw [black] (32.15,-27.63) -- (38.45,-29.67);
+\fill [black] (38.45,-29.67) -- (37.84,-28.95) -- (37.53,-29.9);
+\draw [black] (35.41,-22.46) -- (43.89,-25.64);
+\fill [black] (43.89,-25.64) -- (43.32,-24.89) -- (42.97,-25.83);
+\draw [black] (38.67,-16.85) -- (49.03,-21.15);
+\fill [black] (49.03,-21.15) -- (48.48,-20.38) -- (48.1,-21.3);
+\draw [black] (42.92,-33.12) -- (45.08,-36.48);
+\fill [black] (45.08,-36.48) -- (45.07,-35.53) -- (44.22,-36.07);
+\draw [black] (46.7,-29.7) -- (46.7,-36);
+\fill [black] (46.7,-36) -- (47.2,-35.2) -- (46.2,-35.2);
+\draw [black] (50.92,-25.17) -- (47.58,-36.13);
+\fill [black] (47.58,-36.13) -- (48.29,-35.51) -- (47.33,-35.22);
+\end{tikzpicture}
+\end{center}
+
+
+
+
+
+
+[continuous]
+i model the observation likelihood or emission probability p(y_t | x_t) as a synthesis of audio from notes and noise added. [todo mustbe continus]. the synthesis takes how loud each note is played (a vector), and multiplies it by the basis (a matrix). this is the function from a note to its frequencies (the fundamental and the overtones). i assusme the noise is gaussian for now. [but gaussian-noised audio sounds unlike what we call audio noise, it's too soft/smooth (like an gaussian-blurred image). i think it's because the noise we hear is both positive and skewed to the louder. thus, a chi-squared distribution or a poisson distribution might be better.]
+
+.which is lost in translation to sheet music, besides some groups of notes marked, e.g. "forte" or "piano", because it is discretized.
+
+-  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+todo questions to answer
+
+
+    Identify a graphical model suitable for a new application area, and explore baseline learning algorithms
+    Propose, develop, and experimentally test a new type of learning algorithm for some existing graphical model
+my proposal is a bit of both. 
+
+
+what's the problem?
+polyphonic transcription
+answers "what notes made this audio?"
+the problems are noise, mismatched basis, a large space, 
+
+
+
+what's the solution?
+formally, i strengthen the model from P(x[t,i] | x[t-1,i]) to P(x[t,i] | x[t-1,j] where i ∈ overtones(j)).
+
+
+why this problem?
+alignment. align audio to text by augmenting manual annotation with the output of polyphonic transcription. 
+composition. a musician can improvise, get lost in flow for an hour, and the polyphonic transcription remembers everything they created, even if they forgot. 
+transhuman. simulate perfect pitch.
+music search. content based retrieval in very large digital audio databases (Tzanetakis, 2002)
+composition. interactive music performance systems (Rowe, 2001)
+teaching. transcribe audio heard into notes played and compare to the sheet music, to see if student played right notes while practicing, without a teacher needing to listen [who can't be there 24/7, unless the student is rich].
+
+
+
+what's out there (3 papers)? 
+[1] A. T. Cemgil, H. J. Kappen, and D. Barber. A generative model for music transcription
+[2] Tristan Jehan. Creating Music by Listening.
+[3] Non-Negative Matrix Factorization for Polyphonic Music Transcription
+John Thickstun. Statistical Inference on Music with Applications to the Transcription Problem.
+mostly monophonic.
+jern thesis [is it a "relevant research articles"?]
+. Kashino Kashino et al. (1995) is, to our knowledge, the first author to apply graphical models explicitly to the problem of polyphonic music transcription.
+. Walmsley Walmsley (2000) treats transcription and source separation in a full Bayesian framework. He employs a frame based generalized linear model (a sinusoidal model) and proposes inference by reversible-jump Markov Chain Monte Carlo (MCMC) algorithm. The main advantage of the model is that it makes no strong assumptions about the signal generation mechanism, and views the number of sources as well as the number of harmonics as unknown model parameters
+ ? sources = instruments
+ ? harmonics = notes
+
+
+
+what's new?
+this comes from domain-specific-knowledge of music, in particular, overtones; and is motivated by "shadows" (or false positives along overtones) in other models. one inspiration is "lateral inhibition" among neurons.
+my model is this. 
+noise
+ : gaussian
+ : chisquared
+ : poisson
+
+
+how to eval?
+
+
+what's the plan?
+the biggest challenge is the learning the parameters and infering in the space. the parameters must be balanced in obvious ways to find the optimal rates of false negatives versus false positives. and they need to be tuned in what will be non-obvious ways. to shrink the space, i assume sparsity (as above), but that's not enough, it goes from exponential to sub-exponential. i also use a greedy search (as above) to shrink the space down to where it is tractable. my initial estimate is that enumerating a variable to do vectorized arithmetic over a few million values can perform in realtime (e.g. for a sparse piano, 88 choose 4 = 2 million). the greedy search is itself exponential, but with a small base (e.g. pick top 3 most likely notes in chord) and a limited depth (e.g. guess-and-check 5 most-likely notes at a time). together, i hope to "meet halfway". or maybe i could do a monte carlo tree search, i.e. i sample from some simple (easy to compute) prior on how likely each note is to be audio, a few times, and keep . this makes the deterministic but fragile greedy search into a non-deterministic but more bayesian mcts. i.e. if the prior thinks that almost all the probability mass is in a few notes, it's like greedy; but if it's more uniform, then you pick more random samples and explore more; so exploit only if confident. 
+for example, say the audio has eight notes, which is natural for block chords, or a pedal sustained for a few seconds. with greedy search, 88 choose 7 is too big (we don't know how many notes there are in the audio, but let's say it's the maximum our model supports). but let's guess-and-check the best (by some heuristic) 3 notes, and let's do this 4 times; now we only need to enumerate over 88 choose (7-4) possible triads. together, this is 3^4 ≈ 8 multiplied by 88 choose 3 ≈ 100,000. which should be tractable. or with mcts, take 8 samples (= tree breadth) for 7 notes (= tree depth) to get 7^8 ≈ 2,000,000. or use a decreasing breadth (the fewer notes in the audio the less confusing it is) like 10 * 9 * ... 3 ≈ 2,000,000.
+maybe none of this is enough (the space is still too high dimensional or the search/sampling is too inexact), then i will try a particle filter (the cemgil paper uses a kalman filter), though i fear the curse of dimensionality here. as with the mcts, i don't think too many particles will be necessary, but i could be wrong. 
+
+
+what's the GM?
+losing edges, it's a very high-dimensional HMM with sparsity. gaining edges, it's a factorial HMM with a few edges between the factors. 
+visually, it looks like 
+xfig
+
+
+To test the inference relatively, if I have time, I will compare it to the particle filter from which it is inspired. To discover how informative the ``stickiness'' of the HMM is, I will compare my inference algorithm with weighting by the transitions to just independently sampling from / searching through the emissions (i.e. compare ``just emissions'' to ``both emissions and transitions''). 
+
+
+
+
+
+
+-  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+.tex
+
+\documentclass{article} % For LaTeX2e
+\usepackage{nips12submit_e,times}
+\usepackage{tikz}
+%\documentstyle[nips12submit_09,times,art10]{article} % For LaTeX 2.09
+
+
+\title{Project Proposal for CS2950P}
+
+\author{
+David S.~Hippocampus\\
+Department of Computer Science\\
+Brown University\\
+\texttt{sam_boosalis@brown.edu}
+}
+
+%\newcommand{\fix}{\marginpar{FIX}}
+%\newcommand{\new}{\marginpar{NEW}}
+
+%\nipsfinalcopy % Uncomment for camera-ready version
+
+\begin{document}
+
+
+\maketitle
+
+\begin{abstract}
+I propose a heuristic inference on a simple HMM that exploits the sparsity in polyphonic transcription.
+\end{abstract}
+
+
+
+
+
+
+
+
+
+
+
+
+\section*{The Problem}
+
+The project I am proposing is on the polyphonic transcription problem: given some audio, and some basis of notes, what notes were played at what times and (if continuous) how loud. The difficulty and structure of just the monophonic problem is analogous to speech-to-text; i.e. inverting a hard-to-invert function against noise. Polyphonic transcription is more challenging than monophonic, as there is combinatorial explosion in the state space; but more powerful as it models not just simple melodies but intervals, chords, textures, harmonies, multiple melodies from different instruments; and with the right basis, all of any song, piece, or sound. The increased challenges come from notes that sound alike (e.g. whose representations are not linearly independent), and noise that further distances the audio from a linear function of the notes (e.g. with enough noise in a few places, without context, one note will then sound like another).
+
+Solving this problem would change the way we create and experience music. It has many applications. Alignment: align audio to text by initializing/augmenting manual annotation with the output of polyphonic transcription. Music search: once aligned, we can use content based retrieval in very large digital audio databases (Tzanetakis, 2002). Composition: a musician can improvise, get lost in flow for an hour, and the polyphonic transcription remembers everything they created, even if they forgot. Futuristic: simulate absolute pitch. Composition: interactive music performance systems (Rowe, 2001). Teaching: transcribe audio heard into notes played and compare to the sheet music, to see if student played right notes while practicing, without a teacher needing to listen. And many more.
+
+
+
+
+
+
+
+
+\section*{Solutions in the Literature}
+
+The most cited article on ``polyphonic transcription'' uses non-negative matrix factorization (= NMF) [3]. The motivation is that some audio ($= B : |frequencies| \times |windows|$) is synthesized from a basis ($= A : |frequencies| \times |notes|$) and some notes ($= X : |notes| \times |windows|)$, or $AX = B$ in math. First, after noise, this can only be approximated by $AX \approx B$. Second, since these matrices are rectangular, there is no perfect unique inverse $X ≈ A^{+}B$. Third, observe that everything is nonnegative, as neither negative notes nor negative sound has any physical interpretation. In my experiments, NMF (with multiplicative update) is much faster but outputs equivalent results to gradient descent (with additive update). NMF works well on midi-synthesized (so noiseless, consistent basis) audio (e.g. perfectly transcribing a bach fugue). however, it has three problems: one, it can't be easily extended with domain-specific knowledge of music, as everything is linear algebra (e.g. no sparsity prior that says ``only a few notes are played at a time''); two, it is global and depends on the whole audio, thus not online, although running NMF on prefixes or composing it across a sliding window can work; third, it fails really badly on real data (e.g. myself playing an etude with many notes, on an off-tune piano, with heavy pedal, recorded on a phone), even with the right basis (e.g. I recorded each note from that piano).
+
+A more probabilistic attempt at polyphonic transcription is a graphical model, often some HMM or a generalization thereof. For example, [2] uses a switching state space model with a kalman filter. The model, learning, and inference is more complex than NMF and they published no code, so I didn't try to reproduce it; and they showed only few and small transcriptions; so I can't say whether it works well. 
+
+
+
+\section*{Graphical Model}
+
+An epigraph, where $x_{t,i}\in\{0,1\}$ means note $i$ is on at at time $t$ and $y_t\in \mathbf{R}^{|windows|}$ 
+
+\begin{center}
+\begin{tikzpicture}[scale=0.2]
+\tikzstyle{every node}+=[inner sep=0pt]
+\draw [black] (46.7,-39) circle (3);
+\draw (46.7,-39) node {$y_t$};
+\draw [black] (51.8,-22.3) circle (3);
+\draw (51.8,-22.3) node {$x_{t,k}$};
+\draw [black] (46.7,-26.7) circle (3);
+\draw (46.7,-26.7) node {$x_{t,j}$};
+\draw [black] (41.3,-30.6) circle (3);
+\draw (41.3,-30.6) node {$x_{t,i}$};
+\draw [black] (29.3,-26.7) circle (3);
+\draw (29.3,-26.7) node {$x_{t-1,i}$};
+\draw [black] (32.6,-21.4) circle (3);
+\draw (32.6,-21.4) node {$x_{t-1,j}$};
+\draw [black] (35.9,-15.7) circle (3);
+\draw (35.9,-15.7) node {$x_{t-1,k}$};
+\draw [black] (32.15,-27.63) -- (38.45,-29.67);
+\fill [black] (38.45,-29.67) -- (37.84,-28.95) -- (37.53,-29.9);
+\draw [black] (35.41,-22.46) -- (43.89,-25.64);
+\fill [black] (43.89,-25.64) -- (43.32,-24.89) -- (42.97,-25.83);
+\draw [black] (38.67,-16.85) -- (49.03,-21.15);
+\fill [black] (49.03,-21.15) -- (48.48,-20.38) -- (48.1,-21.3);
+\draw [black] (42.92,-33.12) -- (45.08,-36.48);
+\fill [black] (45.08,-36.48) -- (45.07,-35.53) -- (44.22,-36.07);
+\draw [black] (46.7,-29.7) -- (46.7,-36);
+\fill [black] (46.7,-36) -- (47.2,-35.2) -- (46.2,-35.2);
+\draw [black] (50.92,-25.17) -- (47.58,-36.13);
+\fill [black] (47.58,-36.13) -- (48.29,-35.51) -- (47.33,-35.22);
+\end{tikzpicture}
+\end{center}
+
+
+
+\section*{Contribution of my Solution}
+
+My contribution is a faster approximate inference algorithm that exploits the sparsity in the problem. In practice, polyphony means only a few notes, sometimes several, are ever heard at once. The motivation is twofold. One, signal processing dominates music theory (or local versus global, or lower-level versus higher-level) in transcription. Thus, the dependence between notes (on the timeframe of hundreds of milliseconds) can be safely assumed to be weak or null, which is what [1] does in his factorial HMM. Two, the transitions are low-dimensional, and only promote stickiness. For example, let's take apart the stickiness (let ``0=>1'' mean silence to sound, etc): ``1=>1'' is true for most notes most of the time, thus high probability; ``1=>1'' is also very high, hence stickiness, and ``1=>0'' is lower but makes sense as ``any note must turn off with enough time''; however, ``0=>1'' says ``this note should turn on'' but why this note, rather than any other note? music theory would answer that, but it doesn't seem necessary to complicate the model for something that won't help. Empirically, someone with absolute pitch and musical training people can transcribe several notes from unfamiliar chords they hear briefly (naturally, accuracy does increase with familiar sounds and a longer stimulus). Now, let us set $x_0$ to all zeros, which is naturally interpreted as ``every song starts with silence''. Let us invoke the generative model: if we begin sampling, which notes should be played? why those notes? it doesn't say. Thus, my intuition is that it is $p(y_t | x_t)$ that is much more informative for $x_t$ than $p(x_t | x_{t-1})$. I think it will outperform a particle filter, as ``sample from the transition, then weight by the emission'' may have it backwards. And unlike a kalman filter, like [1], there is no need to make everything linear and gaussian.
+
+So what I want to do is use search. The algorithm is: given some heuristic (e.g. the notes whose fundamentals are  the loudest frequencies in the signal are mostly likely; this function is cheap and fast), pick the note most likely to be in the audio, pick a loudness (e.g. such that the fundmantal won't be louder than the generated audio), generate audio from the note (e.g. loudness $\times$ [0 .. 1 .. 0] $\circ$ its timbre), and subtract it from the signal. This shrinks the space because now the signal has less in it. The search tree's breadth is how many notes we want to guess/sample we want, and the depth is how many notes may be in the audio. Assuming depth first search for now, the search size is linear in space and exponential in time (wrt the number of notes). One optimization is to avoid subtracting the same notes in a different order (e.g. both ``C => F\# => ...'' and then ``F\# => C => ...'') as addition commutes. Generally, greedy search linearizes an exponential space; here, I am only searching the subset of the space that is probably where the true states are, as sparsity keeps the exponent low (e.g. $10^5$ is not too bad, and this means trying 10 notes at a time (which out of 88 notes is a wide search) for a signal with 5 notes (which is rare)). One problem is that by only subtracting the notes, the noise stays, and builds up. Given that, if I have time, I want to bring back probability, with monte carlo tree search, where the actions are which note to subtract. Sample from a distribution $p(x_{t,i} | y_t)$ that asks ``how likely is note $i$ to be in the signal?''. An optimization may be starting the breadth high, then decreasing it as there are fewer notes. Conversely, maybe we want to start low and grow as the noise builds up and makes things look similar. 
+
+After the search has output several ``samples'' of $x_t$ given $y_t$, we can weigh them by some function of the $x_{t-1}$ particles (e.g. the empirical expectation or $\sum_{l=0}^{|particles|} p(x_t|x^{(l)}_{t-1}) w^{(l)}$), and keep the best fits. (Maybe I could parallel the particle filter even more, by resampling for example, but since I have no theoretical justification for this, it may help or hurt). Thus, I want to ``swap'' the particle filter algorithm to ``sample up from the emission, weigh by the transition''. 
+
+
+
+\section*{Evaluation}
+
+To test the inference absolutely, there are two datasets to use: MIDI and live. The MIDI data is automatically computer-generated, and thus cheap and infinite. The live data is audio played by humans, recorded in what may be a noisy environment. The audio must be manually aligned to the score at the right times. It is hard to make and finite. However, this real data is necessary as it is harder to transcribe for many reasons: more nosie, more variance, more notes. First, the noise comes from a noisy room and low-quality recorder. Second, the variance comes from a human playing, with more varied dynamics, more varied attack, and different pianos all create model misspecifications (the note transcribed is different from the note played). Third, for both datasets, there are more notes at the same time in faster music and sustains (e.g. with the pedal on, for a piano), which makes the audio ``more polyphonic'' and thus exponentially harder.
+
+An objective/automatic evaluation is to diff the binary matrices (where the columns are moments in time and the rows are notes), i.e. the outputted notes verus the true notes. you could also count the number of notes by horizontal flood fill. I will also conduct a more subjective/manual evaluation, to look for several things that could go wrong (and have gone wrong in other models), and to watch out for new problems: if there are ``holes'' (i.e. ``small'' false negatives), the transitions may not be sticky enough; if entire notes are missing (i.e. big false negatives), the sparsity may be too strong (among other things); if ther are ``dots'' (i.e. small false positives) or long wrong notes (i.e. big false positives), there may be too much noise that isn't being handled correctly (possibly ``transposing'' the audio); if notes are transposed (e.g. a D3 or an A3 or a D\#4 from time 1 second to 2 seconds where there should be a D\#3), maybe the basis is misspecified (i.e. linearly dependent) or maybe the overtones are being misinterpreted as their own fundamentals; if the bass is much better than the clef, I might need to logarithmically rescale energies to the sensitivity of the human ear [1]; if short notes are missing, the window size might need to shrink or the model's distinction between noise and short notes must be tuned (hopefully noise is empirically much briefer).
+
+This pipeline extracts a ``piano roll'' and synthesizes audio from the midi; then adds noise (possibly from some noise model like chi-squared samples, or something empirical like recordings from a noisy room, permuting it to multiply the number of different ``noises''); and finally compares true notes of input to inferred notes of output (as above).
+
+
+
+
+
+\section*{References}
+
+\small{
+[1] A. T. Cemgil, H. J. Kappen, and D. Barber. A generative model for music transcription
+
+[2] Tristan Jehan. Creating Music by Listening.
+
+[3] Non-Negative Matrix Factorization for Polyphonic Music Transcription
+}
+
+\end{document}
+
+
+-  -  -  -  -  -  -  -  -  -  -  -  -  -  -
