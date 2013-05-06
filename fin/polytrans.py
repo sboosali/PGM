@@ -85,8 +85,10 @@ file = args.file
 window_size = 2**12 # 44100 samples/second / 2^12 samples/window = 10 windows/second
 Y, sample_rate = fft_wav(file, window_size=window_size)
 T, _ = Y.shape # time in windows
+window_rate = sample_rate / window_size # samples/second / samples/window = windows/second
 
 A,freqs,notes = basis(args.data, truncate=44100*5, window_size=window_size)
+
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # Model
@@ -99,8 +101,8 @@ L = 100
 X0 = [0]*d
 
 #TODO data-driven
-p00 = 0.1 # P(silence sticks)
-p11 = 0.9 # P(sound sticks)
+p00 = 0.05 # P(silence sticks)
+p11 = 0.99 # P(sound sticks)
 transition = a([[p00, 1-p00],
                 [1-p11, p11]])
 def weigh(prevs, currs):
@@ -123,37 +125,28 @@ def sample(y, L, ymin=1e4, ymax=+inf):
     
     """
     p = len(y)
-    window_rate = sample_rate / window_size
-
-    # index = [i for i in y.argsort().tolist()[::-1] if y[i]>ymin]
-    # frequency = [(i * (sample_rate / window_size)) for i in index]
-    # amplitude = [y[i]/ymax                         for i in index]
 
     _freqs = {i*window_rate : y[i] for i in range(p)} # y[fft basis] => y[freq basis]
     _notes = {n : max(_freqs[f] for f in fs) / ymax # max ampl of freqs near note
               for n,fs in groupby(sorted(_freqs),key=note)} # group freqs by note
 
-    return a([[ber(_notes[notes[j]]) for j in range(d)] for _ in range(L)])
+    return a([[ber(_notes.get(notes[j],0)) for j in range(d)] for _ in range(L)])
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # Test
 
-#title = 'Polyphonic Transcription of %s by Particle Filter' % (file)
-#d2(X, freqs, sample_rate, window_size, title=title)
-def viz(x,t):
-    if t==0: axis((0,T, 1,d))
-    if t>T: axis((0,t, 1,d))
-    plot(x)
-
 print 'T =', T
-
 before = time.clock()
-X = []
+
+X = zeros((d,T), dtype=bool)
 for t,x in enumerate(particle_filter(Y, X0, sample, weigh, L=1000)):
-    X.append(x)
-X = a(X).T
+    X[:,t] = x
+    if t % (2*window_rate) < 1: # about every second
+        clf()
+        d2(X, freqs, notes, sample_rate, window_size, save=0, title='', delay=0)
+
 after = time.clock()
-
 print 'runtime = %ds' % int(after-before)
-d2(X, freqs, notes, sample_rate, window_size, save='', 1=title)
 
+clf()
+d2(X, freqs, notes, sample_rate, window_size, save=1, title='')
