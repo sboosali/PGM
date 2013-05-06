@@ -55,13 +55,14 @@ def particle_filter(Y, X0, sample, weigh, L=100):
 
     for t,y in enumerate(Y):
         print '- %d -' % (t+1)
-
         ymax = max(ymax, y.max())
 
         # sample
+        bef = time.clock()
         particles = sample(y, L, ymin=0, ymax=ymax)
+        aft = time.clock()
+        print aft-bef
 
-        # weigh
         weights = a([weigh(X, particle) for particle in particles])
         weights /= sum(weights)
 
@@ -79,11 +80,11 @@ def particle_filter(Y, X0, sample, weigh, L=100):
 cmd=argparse.ArgumentParser(description='Polyphonic Transcription by Particle Filter with Likelihood Samples')
 cmd.add_argument('file', help='a .wav audio file, the input to transcribe')
 cmd.add_argument('data', help='a dir of .wav audio files, defines what notes are')
+cmd.add_argument('-L', type=int, default=100, help='the number of particles in the particle filter')
 args=cmd.parse_args()
 
-file = args.file
 window_size = 2**12 # 44100 samples/second / 2^12 samples/window = 10 windows/second
-Y, sample_rate = fft_wav(file, window_size=window_size)
+Y, sample_rate = fft_wav(args.file, window_size=window_size)
 T, _ = Y.shape # time in windows
 window_rate = sample_rate / window_size # samples/second / samples/window = windows/second
 
@@ -96,9 +97,6 @@ A,freqs,notes = basis(args.data, truncate=44100*5, window_size=window_size)
 # the graphical model is a factoiral HMM
 var = [0,1]
 d,_ = A.shape
-
-L = 100
-X0 = [0]*d
 
 #TODO data-driven
 p00 = 0.05 # P(silence sticks)
@@ -122,6 +120,14 @@ def sample(y, L, ymin=1e4, ymax=+inf):
 
     highest-amplitude freqencies
     uniq([note(i * (sample_rate / window_size))  for i in y.argsort().tolist()[::-1] if y[i]>min])
+
+    runtimes (d=44)
+    ./polytrans.py y/chord.wav data/octave/
+    T(L=1)      = 0.30s
+    T(L=10)     = 0.30s
+    T(L=100)    = 0.30s
+    T(L=1000)   = 0.35s
+    T(L=10000)  = 1.75s
     
     """
     p = len(y)
@@ -137,16 +143,16 @@ def sample(y, L, ymin=1e4, ymax=+inf):
 
 print 'T =', T
 before = time.clock()
-
 X = zeros((d,T), dtype=bool)
-for t,x in enumerate(particle_filter(Y, X0, sample, weigh, L=1000)):
+for t,x in enumerate(particle_filter(Y[:10], [0]*d, sample, weigh, L=args.L)):
     X[:,t] = x
     if t % (2*window_rate) < 1: # about every second
         clf()
         d2(X, freqs, notes, sample_rate, window_size, save=0, title='', delay=0)
-
 after = time.clock()
 print 'runtime = %ds' % int(after-before)
 
 clf()
-d2(X, freqs, notes, sample_rate, window_size, save=1, title='')
+d2(X, freqs, notes, sample_rate, window_size, save=1,
+   title='polytrans file=%s data=%s (p00, p11)=(%s, %s) L=%d' % (args.file, args.data, p00, p11, args.L))
+
