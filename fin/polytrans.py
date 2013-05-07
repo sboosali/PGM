@@ -99,7 +99,7 @@ d,_ = A.shape
 
 #TODO data-driven
 p00 = 0.05 # P(silence sticks)
-p11 = 0.99 # P(sound sticks)
+p11 = 0.999 # P(sound sticks)
 transition = a([[p00, 1-p00],
                 [1-p11, p11]])
 def weigh(prevs, currs):
@@ -131,7 +131,7 @@ def sample(y, L, ymin=1e4, ymax=+inf):
     """
     p = len(y)
 
-    _freqs = {i*window_rate : y[i] for i in range(p)} # y[fft basis] => y[freq basis]
+    _freqs = {i*window_rate : y[i] for i in range(p) if y[i]>ymin} # y[fft basis] => y[freq basis]
     _notes = {n : max(_freqs[f] for f in fs) / ymax # max ampl of freqs near note
               for n,fs in groupby(sorted(_freqs),key=note)} # group freqs by note
 
@@ -140,17 +140,29 @@ def sample(y, L, ymin=1e4, ymax=+inf):
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # Test
 
+def infer_by_fft(y):
+    _freqs = {i*window_rate : y[i] for i in range(len(y))} # y[fft basis] => y[freq basis]
+    _notes = {n : max(_freqs[f] for f in fs) # max ampl of freqs near note
+              for n,fs in groupby(sorted(_freqs),key=note)} # group freqs by note
+    return a([_notes.get(notes[j],0) for j in range(d)])
+X = zeros((T,d))
+for t in range(T):
+    print t
+    X[t] = infer_by_fft(Y[t])
+viz(X.T, freqs, notes, sample_rate, window_size, save=1, title='', delay=0)
+exit()
+
 print 'T =', T
 bef()
-X = zeros((d,T), dtype=bool)
+X = zeros((T,d), dtype=bool)
 for t,x in enumerate(particle_filter(Y, [0]*d, sample, weigh, L=args.L)):
-    X[:,t] = x
+    X[t] = x
     if t % (2*window_rate) < 1: # about every second (nb. window_rate is not an int)
         clf()
-        viz(X, freqs, notes, sample_rate, window_size, save=0, title='', delay=0)
+        viz(X.T, freqs, notes, sample_rate, window_size, save=0, title='', delay=0)
 print 'runtime = %d' % aft()
 
 clf()
-viz(X, freqs, notes, sample_rate, window_size, save=1,
+viz(X.T, freqs, notes, sample_rate, window_size, save=1,
    title='polytrans file=%s data=%s (p00, p11)=(%s, %s) L=%d' % (args.file, args.data, p00, p11, args.L))
 

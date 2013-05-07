@@ -193,11 +193,20 @@ def basis(dir, truncate=44100*5, window_size=2**12):
 
     return A, freqs, notes
 
-def munge_basis(dir, truncate=44100*5):
-    """
-    truncate lengths across data
-    normalize energies within datum
-    """
+# def munge_basis(dir, truncate=44100*5):
+#     """
+#     truncate lengths across data
+#     normalize energies within datum
+#     """
+#     #TODO didnt work
+#     data = glob('%s/*.wav' % dir.strip('/'))
+
+#     ymax = max(audio_wav(file, truncate=truncate)[0].max() for file in data)
+
+#     for file in data:
+#         audio, sample_rate = audio_wav(file, truncate=truncate)
+#         print audio.max()
+#         wavfile.write('tmp/%s' % file, sample_rate, audio)
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
 # Plot
