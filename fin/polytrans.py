@@ -58,10 +58,9 @@ def particle_filter(Y, X0, sample, weigh, L=100):
         ymax = max(ymax, y.max())
 
         # sample
-        bef = time.clock()
+        bef()
         particles = sample(y, L, ymin=0, ymax=ymax)
-        aft = time.clock()
-        print aft-bef
+        print aft()
 
         weights = a([weigh(X, particle) for particle in particles])
         weights /= sum(weights)
@@ -142,17 +141,16 @@ def sample(y, L, ymin=1e4, ymax=+inf):
 # Test
 
 print 'T =', T
-before = time.clock()
+bef()
 X = zeros((d,T), dtype=bool)
-for t,x in enumerate(particle_filter(Y[:10], [0]*d, sample, weigh, L=args.L)):
+for t,x in enumerate(particle_filter(Y, [0]*d, sample, weigh, L=args.L)):
     X[:,t] = x
-    if t % (2*window_rate) < 1: # about every second
+    if t % (2*window_rate) < 1: # about every second (nb. window_rate is not an int)
         clf()
-        d2(X, freqs, notes, sample_rate, window_size, save=0, title='', delay=0)
-after = time.clock()
-print 'runtime = %ds' % int(after-before)
+        viz(X, freqs, notes, sample_rate, window_size, save=0, title='', delay=0)
+print 'runtime = %d' % aft()
 
 clf()
-d2(X, freqs, notes, sample_rate, window_size, save=1,
+viz(X, freqs, notes, sample_rate, window_size, save=1,
    title='polytrans file=%s data=%s (p00, p11)=(%s, %s) L=%d' % (args.file, args.data, p00, p11, args.L))
 

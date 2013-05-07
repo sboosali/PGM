@@ -193,13 +193,18 @@ def basis(dir, truncate=44100*5, window_size=2**12):
 
     return A, freqs, notes
 
+def munge_basis(dir, truncate=44100*5):
+    """
+    truncate lengths across data
+    normalize energies within datum
+    """
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
 # Plot
 
 def pp(x): print x; return x
 
-def d2(X, freqs, notes, sample_rate, window_size, title='', save=True):
+def viz(X, freqs, notes, sample_rate, window_size, title='', save=True, delay=3600):
     """
     x-axis
     = time in seconds
@@ -213,7 +218,6 @@ def d2(X, freqs, notes, sample_rate, window_size, title='', save=True):
     d, n_windows = X.shape
     window_rate = 2 * sample_rate / window_size # windows per second
 
-    if not save: ion()
     axes = gca()
     axes.imshow(X, cmap=cm.bone_r, origin='lower', aspect='auto', interpolation='nearest')
     axes.set_title(title)
@@ -229,7 +233,21 @@ def d2(X, freqs, notes, sample_rate, window_size, title='', save=True):
         FuncFormatter(lambda x,y: '%s' % (notes[(y-1)//2] if odd(y) else '')))
 
     if save:
+        ioff()
         show()
     else:
+        ion()
         draw()
-        time.sleep(3600)
+        time.sleep(delay)
+        show()
+
+def bef():
+    global before
+    before = time.clock()
+    return before
+
+def aft():
+    global after
+    after = time.clock()
+    return after-before
+
