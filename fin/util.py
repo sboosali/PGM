@@ -12,6 +12,9 @@ from scipy.io import wavfile
 
 from sam.sam import *
 
+def normalize(A):
+    A /= sum(A)
+    return A
 
 def cat(*As): return concatenate(As)
 
@@ -184,29 +187,14 @@ def basis(dir, truncate=44100*5, window_size=2**12):
     data.sort(key=file2freq)
     n = len(data)
     A = zeros((n, window_size/2)) # : note => spectrum
-    freqs = [file2freq(file) for file in data]
-    notes = [note(file2freq(file)) for file in data]
+    freqs = {     file2freq(file)  : i for i,file in enumerate(data)}
+    notes = [note(file2freq(file))     for i,file in enumerate(data)]
 
     for i,file in enumerate(data):
         spectrum, _ = fft_wav(file, truncate=truncate, window_size=window_size)
         A[i] = sum(spectrum, axis=0) / sum(spectrum)
 
     return A, freqs, notes
-
-# def munge_basis(dir, truncate=44100*5):
-#     """
-#     truncate lengths across data
-#     normalize energies within datum
-#     """
-#     #TODO didnt work
-#     data = glob('%s/*.wav' % dir.strip('/'))
-
-#     ymax = max(audio_wav(file, truncate=truncate)[0].max() for file in data)
-
-#     for file in data:
-#         audio, sample_rate = audio_wav(file, truncate=truncate)
-#         print audio.max()
-#         wavfile.write('tmp/%s' % file, sample_rate, audio)
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
 # Plot

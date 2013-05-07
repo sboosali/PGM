@@ -73,6 +73,14 @@ def particle_filter(Y, X0, sample, weigh, L=100):
         yield X
 
 
+def infer_by_fft(Y):
+    for y in Y:
+        _freqs = {i*window_rate : y[i] for i in range(len(y))} # y[fft basis] => y[freq basis]
+        _notes = {n : max(_freqs[f] for f in fs) # max ampl of freqs near note
+                  for n,fs in groupby(sorted(_freqs),key=note)} # group freqs by note
+        yield a([_notes.get(notes[j],0) for j in range(d)])
+
+
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # Input
 
@@ -118,7 +126,7 @@ def sample(y, L, ymin=1e4, ymax=+inf):
     (cycles / samples/window) * (1 / windows/second) * (samples / seconds) = cycles / second = Hz
 
     highest-amplitude freqencies
-    uniq([note(i * (sample_rate / window_size))  for i in y.argsort().tolist()[::-1] if y[i]>min])
+    uniq([note(i * (sample_rate / window_size))  for i in y.argsort().tolist()[::-1] if y[i]>0])
 
     runtimes (d=44)
     ./polytrans.py y/chord.wav data/octave/
@@ -127,7 +135,7 @@ def sample(y, L, ymin=1e4, ymax=+inf):
     T(L=100)    = 0.30s
     T(L=1000)   = 0.35s
     T(L=10000)  = 1.75s
-    
+
     """
     p = len(y)
 
@@ -137,20 +145,17 @@ def sample(y, L, ymin=1e4, ymax=+inf):
 
     return a([[ber(_notes.get(notes[j],0)) for j in range(d)] for _ in range(L)])
 
+
+
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # Test
 
-def infer_by_fft(y):
-    _freqs = {i*window_rate : y[i] for i in range(len(y))} # y[fft basis] => y[freq basis]
-    _notes = {n : max(_freqs[f] for f in fs) # max ampl of freqs near note
-              for n,fs in groupby(sorted(_freqs),key=note)} # group freqs by note
-    return a([_notes.get(notes[j],0) for j in range(d)])
-X = zeros((T,d))
-for t in range(T):
-    print t
-    X[t] = infer_by_fft(Y[t])
-viz(X.T, freqs, notes, sample_rate, window_size, save=1, title='', delay=0)
-exit()
+# X = zeros((T,d))
+# for t,x in enumerate(infer_by_fft(Y)):
+#     print '%d/%d' % (t,T)
+#     X[t] = x
+# viz(X.T, freqs, notes, sample_rate, window_size, save=1, title='', delay=0)
+# exit()
 
 print 'T =', T
 bef()
