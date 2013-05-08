@@ -95,7 +95,7 @@ def nmf_infer(A, B, iters=50):
     X = (1/d) * ones((d, T))
 
     for i in xrange(iters):
-        print '%d/%d' % (i,iters)
+        print '%d/%d' % (i+1,iters)
         assert all(X>=0)
         X = X * mul( A.T, B ) / mul( A.T, A, X )
 
@@ -107,7 +107,12 @@ def nmf_infer(A, B, iters=50):
 cmd=argparse.ArgumentParser(description='Polyphonic Transcription by Particle Filter with Likelihood Samples')
 cmd.add_argument('file', help='a .wav audio file, the input to transcribe')
 cmd.add_argument('base', help='a dir of .wav audio files, defines what notes are')
-cmd.add_argument('-L', type=int, default=100, help='the number of particles in the particle filter')
+cmd.add_argument('-L', type=int, default=100,
+                 help='the number of particles in the particle filter')
+inference_algorithms = ['pf', 'fft', 'nmf']
+cmd.add_argument('-by', 
+                 type=lambda x: x if x in inference_algorithms else None, default='pf',
+                 help='one of [pf fft nmf], the inference algorithm')
 args=cmd.parse_args()
 
 window_size = 2**12 # 44100 samples/second / 2^12 samples/window = 10 windows/second
@@ -170,16 +175,22 @@ def sample(y, L, ymin=1e4, ymax=+inf):
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # Test
 
-# X = zeros((T,d))
-# for t,x in enumerate(fft_infer(Y)):
-#     print '%d/%d' % (t,T)
-#     X[t] = x
-# viz(X.T, notes, sample_rate, window_size, save=1, title='', delay=0)
-# exit()
+if args.by=='fft':
+    X = zeros((T,d))
+    for t,x in enumerate(fft_infer(Y)):
+        print '%d/%d' % (t+1,T)
+        X[t] = x
+    viz(X.T, notes, sample_rate, window_size, save=1, delay=0)
+    exit()
 
-# iters = 50
-# X = nmf_infer(A,Y, iters=iters)
-# viz(X, notes,title='NMF euclidean file=%s base=%s iters=%d' % (args.file, args.base, iters))
+
+if args.by=='nmf':
+    iters = 50
+    X = nmf_infer(A,Y, iters=iters)
+    viz(X, notes,
+        title='NMF euclidean file=%s base=%s iters=%d' % (args.file, args.base, iters))
+    exit()
+
 
 print 'T =', T
 bef()
