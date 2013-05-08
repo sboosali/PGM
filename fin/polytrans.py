@@ -73,20 +73,40 @@ def particle_filter(Y, X0, sample, weigh, L=100):
         yield X
 
 
-def infer_by_fft(Y):
+def fft_infer(Y):
     for y in Y:
         _freqs = {i*window_rate : y[i] for i in range(len(y))} # y[fft basis] => y[freq basis]
         _notes = {n : max(_freqs[f] for f in fs) # max ampl of freqs near note
                   for n,fs in groupby(sorted(_freqs),key=note)} # group freqs by note
         yield a([_notes.get(notes[j],0) for j in range(d)])
 
+def nmf_infer(A, B, iters=50):
+    """
+    jointly solve AX=B for X where X>=0
+    multiplicative update with euclidean distance
+    """
+    assert all(B>=0)
+    assert all(A>=0)
+    B = B[:-1, :]
+    T, p = B.shape
+    d, p = A.shape
+    A = A.T
+    B = (B / sum(B)).T
+    X = (1/d) * ones((d, T))
+
+    for i in xrange(iters):
+        print '%d/%d' % (i,iters)
+        assert all(X>=0)
+        X = X * mul( A.T, B ) / mul( A.T, A, X )
+
+    return X
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # Input
 
 cmd=argparse.ArgumentParser(description='Polyphonic Transcription by Particle Filter with Likelihood Samples')
 cmd.add_argument('file', help='a .wav audio file, the input to transcribe')
-cmd.add_argument('data', help='a dir of .wav audio files, defines what notes are')
+cmd.add_argument('base', help='a dir of .wav audio files, defines what notes are')
 cmd.add_argument('-L', type=int, default=100, help='the number of particles in the particle filter')
 args=cmd.parse_args()
 
@@ -95,7 +115,7 @@ Y, sample_rate = fft_wav(args.file, window_size=window_size)
 T, _ = Y.shape # time in windows
 window_rate = sample_rate / window_size # samples/second / samples/window = windows/second
 
-A,freqs,notes = basis(args.data, truncate=44100*5, window_size=window_size)
+A,freqs,notes = basis(args.base, truncate=44100*5, window_size=window_size)
 
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -129,7 +149,7 @@ def sample(y, L, ymin=1e4, ymax=+inf):
     uniq([note(i * (sample_rate / window_size))  for i in y.argsort().tolist()[::-1] if y[i]>0])
 
     runtimes (d=44)
-    ./polytrans.py y/chord.wav data/octave/
+    ./polytrans.py y/chord.wav base/octave/
     T(L=1)      = 0.30s
     T(L=10)     = 0.30s
     T(L=100)    = 0.30s
@@ -151,11 +171,15 @@ def sample(y, L, ymin=1e4, ymax=+inf):
 # Test
 
 # X = zeros((T,d))
-# for t,x in enumerate(infer_by_fft(Y)):
+# for t,x in enumerate(fft_infer(Y)):
 #     print '%d/%d' % (t,T)
 #     X[t] = x
-# viz(X.T, freqs, notes, sample_rate, window_size, save=1, title='', delay=0)
+# viz(X.T, notes, sample_rate, window_size, save=1, title='', delay=0)
 # exit()
+
+# iters = 50
+# X = nmf_infer(A,Y, iters=iters)
+# viz(X, notes,title='NMF euclidean file=%s base=%s iters=%d' % (args.file, args.base, iters))
 
 print 'T =', T
 bef()
@@ -164,10 +188,10 @@ for t,x in enumerate(particle_filter(Y, [0]*d, sample, weigh, L=args.L)):
     X[t] = x
     if t % (2*window_rate) < 1: # about every second (nb. window_rate is not an int)
         clf()
-        viz(X.T, freqs, notes, sample_rate, window_size, save=0, title='', delay=0)
+        viz(X.T, notes, sample_rate, window_size, save=0, title='', delay=0)
 print 'runtime = %d' % aft()
 
 clf()
-viz(X.T, freqs, notes, sample_rate, window_size, save=1,
-   title='polytrans file=%s data=%s (p00, p11)=(%s, %s) L=%d' % (args.file, args.data, p00, p11, args.L))
+viz(X.T, notes, sample_rate, window_size, save=1,
+   title='polytrans file=%s base=%s (p00, p11)=(%s, %s) L=%d' % (args.file, args.base, p00, p11, args.L))
 

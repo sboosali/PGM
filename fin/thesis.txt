@@ -35,9 +35,9 @@ p : P
 q : P
 p* ∝ p : can eval
 q* ∝ q : can eval : can sample
-K = |particles|
+L = |particles|
 
-weight of particle filter , w[k][t]
+weight of particle filter , w[t][k]
 = f(x[t]|x[t-1]) * g(y[t]|x[t]) / q(x[t]|x[t-1],y[t])
 q = g -> w = f
 f = ∏ Ber
@@ -57,7 +57,7 @@ rejection sampling
 . kalman filter
 extended kalman filter
 unscented kalman filter
-particle filter
+. particle filter
 MCMC
 metropolis-hastings sampling
 gibbs sampling

@@ -201,7 +201,7 @@ def basis(dir, truncate=44100*5, window_size=2**12):
 
 def pp(x): print x; return x
 
-def viz(X, freqs, notes, sample_rate, window_size, title='', save=True, delay=3600):
+def viz(X, notes, sample_rate=44100, window_size=2**12, title='', save=True, delay=3600):
     """
     x-axis
     = time in seconds
@@ -247,4 +247,9 @@ def aft():
     global after
     after = time.clock()
     return after-before
+
+def info(A):
+    print 'shape =', A.shape
+    print 'dtype =', A.dtype
+    print 'min, max = %s, %s' % (A.min(), A.max())
 
