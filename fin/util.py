@@ -102,7 +102,7 @@ def audio_wav(file, truncate=None):
 
     return audio, sample_rate
 
-def my_fft(audio, sample_rate, window_size=2**12):
+def my_fft(audio, sample_rate=44100, window_size=2**12):
     """
     does fft on audio
 
@@ -189,12 +189,14 @@ def basis(dir, truncate=44100*5, window_size=2**12):
     A = zeros((n, window_size/2)) # : note => spectrum
     freqs = {     file2freq(file)  : i for i,file in enumerate(data)}
     notes = [note(file2freq(file))     for i,file in enumerate(data)]
+    sr = nans(n) # sample rate
 
     for i,file in enumerate(data):
-        spectrum, _ = fft_wav(file, truncate=truncate, window_size=window_size)
+        spectrum, sr[i] = fft_wav(file, truncate=truncate, window_size=window_size)
+        if i: assert(sr[i]==sr[i-1])
         A[i] = sum(spectrum, axis=0) / sum(spectrum)
 
-    return A, freqs, notes
+    return A, freqs, notes, sr[0]
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
 # Plot
@@ -249,6 +251,7 @@ def aft():
     return after-before
 
 def info(A):
+    print
     print 'shape =', A.shape
     print 'dtype =', A.dtype
     print 'min, max = %s, %s' % (A.min(), A.max())

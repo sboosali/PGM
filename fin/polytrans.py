@@ -12,6 +12,7 @@ from itertools import groupby
 from util import *
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
+# Infer
 
 def particle_filter(Y, X0, sample, weigh, L=100):
     """
@@ -49,8 +50,8 @@ def particle_filter(Y, X0, sample, weigh, L=100):
     """
     print '--- Particle Filter (L=%d) ---' % L
 
-    X = a(X0)
-    d, = X.shape
+    Xs = a([X0() for _ in range(L)])
+    L,d = Xs.shape
     ymax = 1e6
 
     for t,y in enumerate(Y):
@@ -58,11 +59,9 @@ def particle_filter(Y, X0, sample, weigh, L=100):
         ymax = max(ymax, y.max())
 
         # sample
-        bef()
         particles = sample(y, L, ymin=0, ymax=ymax)
-        print aft()
 
-        weights = a([weigh(X, particle) for particle in particles])
+        weights = a([weigh(Xs[l], particles[l]) for l in range(L)])
         weights /= sum(weights)
 
         # resample
@@ -87,21 +86,23 @@ def nmf(A, B, iters=50):
     """
     assert all(B>=0)
     assert all(A>=0)
+    if B.ndim==1: B.shape = 1, B.size
     T, p = B.shape
     d, p = A.shape
     A = A.T
     B = (B / sum(B)).T
     X = (1/d) * ones((d, T))
 
-    for i in xrange(iters):
+    for i in range(iters):
         print '%d/%d' % (i+1,iters)
-        assert all(X>=0)
         X = X * mul( A.T, B ) / mul( A.T, A, X )
 
+    assert all(X>=0)
+    if T==1: X.shape = (d,)
     return X
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-# Input
+# Model ~> Input
 
 cmd=argparse.ArgumentParser(description='Polyphonic Transcription by Particle Filter with Likelihood Samples')
 cmd.add_argument('file', help='a .wav audio file, the input to transcribe')
@@ -115,15 +116,8 @@ cmd.add_argument('-by',
 args=cmd.parse_args()
 
 window_size = 2**12 # 44100 samples/second / 2^12 samples/window = 10 windows/second
-Y, sample_rate = fft_wav(args.file, window_size=window_size)
-T, _ = Y.shape # time in windows
-window_rate = sample_rate / window_size # samples/second / samples/window = windows/second
+A,freqs,notes,sample_rate = basis(args.base, truncate=44100*5, window_size=window_size)
 
-A,freqs,notes = basis(args.base, truncate=44100*5, window_size=window_size)
-
-
-# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-# Model
 
 # the graphical model is a factoiral HMM
 var = [0,1]
@@ -135,6 +129,7 @@ p11 = 0.999 # P(sound sticks)
 transition = a([[p00, 1-p00],
                 [1-p11, p11]])
 def weigh(prevs, currs):
+    #TODO vectorize
     return product([transition[prev,curr] for prev,curr in zip(prevs,currs)])
 
 def sample(y, L, ymin=1e4, ymax=+inf):
@@ -172,7 +167,12 @@ def sample(y, L, ymin=1e4, ymax=+inf):
 
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-# Test
+# Main
+
+Y, sample_rate = fft_wav(args.file, window_size=window_size)
+T, _ = Y.shape # time in windows
+window_rate = sample_rate / window_size # samples/second / samples/window = windows/second
+
 
 if args.by=='fft':
     X = zeros((T,d))
@@ -184,17 +184,20 @@ if args.by=='fft':
 
 
 if args.by=='nmf':
+    X = zeros((T,d))
     iters = 50
-    X = nmf(A,Y, iters=iters)
-    viz(X, notes,
-        title='NMF euclidean file=%s base=%s iters=%d' % (args.file, args.base, iters))
+    for t in range(T):
+        X[t] = nmf(A,Y[t], iters=10)
+        viz(X.T, notes, save=0, delay=0, title='NMF euclidean file=%s base=%s iters=%d' % (args.file, args.base, iters))
+    viz(X.T, notes, save=1, title='NMF euclidean file=%s base=%s iters=%d' % (args.file, args.base, iters))
     exit()
 
 
 print 'T =', T
 bef()
+def X0(): return [0]*d
 X = zeros((T,d), dtype=bool)
-for t,x in enumerate(particle_filter(Y, [0]*d, sample, weigh, L=args.L)):
+for t,x in enumerate(particle_filter(Y, X0, sample, weigh, L=args.L)):
     X[t] = x
     if t % (2*window_rate) < 1: # about every second (nb. window_rate is not an int)
         clf()
@@ -203,5 +206,5 @@ print 'runtime = %d' % aft()
 
 clf()
 viz(X.T, notes, sample_rate, window_size, save=1,
-   title='polytrans file=%s base=%s (p00, p11)=(%s, %s) L=%d' % (args.file, args.base, p00, p11, args.L))
+   title='polytrans %s %s L=%d (p00, p11)=(%s, %s)' % (args.file, args.base, p00, p11, args.L))
 
