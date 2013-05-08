@@ -80,14 +80,13 @@ def fft_infer(Y):
                   for n,fs in groupby(sorted(_freqs),key=note)} # group freqs by note
         yield a([_notes.get(notes[j],0) for j in range(d)])
 
-def nmf_infer(A, B, iters=50):
+def nmf(A, B, iters=50):
     """
     jointly solve AX=B for X where X>=0
     multiplicative update with euclidean distance
     """
     assert all(B>=0)
     assert all(A>=0)
-    B = B[:-1, :]
     T, p = B.shape
     d, p = A.shape
     A = A.T
@@ -186,7 +185,7 @@ if args.by=='fft':
 
 if args.by=='nmf':
     iters = 50
-    X = nmf_infer(A,Y, iters=iters)
+    X = nmf(A,Y, iters=iters)
     viz(X, notes,
         title='NMF euclidean file=%s base=%s iters=%d' % (args.file, args.base, iters))
     exit()

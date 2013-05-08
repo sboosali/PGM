@@ -116,10 +116,10 @@ def my_fft(audio, sample_rate, window_size=2**12):
     """
 
     hanning_window = hanning(window_size)
-    n_windows = int32(audio.size/window_size *2) # overlap windows doubles
+    n_windows = int32(audio.size/window_size*2) - 1 # overlap windows doubles, ignore last partial window
     spectra = zeros((n_windows, window_size/2)) # symmetric fft halves
 
-    for i in xrange(0,n_windows-1):
+    for i in range(n_windows):
         t = int32(i* window_size/2)
         window = audio[t : t+window_size] * hanning_window # elemwise mult
         # half to ignore symmetry => abs to get amplitude
