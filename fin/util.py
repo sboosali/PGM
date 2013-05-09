@@ -12,6 +12,12 @@ from scipy.io import wavfile
 
 from sam.sam import *
 
+def basename(s):
+    if s[-1]=='/': s = s[:-1] # rem slash if dir with slash
+    s = s.split('/')[-1] # rem dirs
+    if '.' in s: s = s[:s.index('.')] # rem ext if file
+    return s
+
 def normalize(A):
     A /= sum(A)
     return A
@@ -158,10 +164,10 @@ def file2freq(file):
     """
     file = basename(file)
 
-    frequency = re.match('[A-G][#b]?(?P<freq>[0-9]+)', file)
-    if frequency:
-        frequency = frequency.groupdict()['freq']
-        return int(frequency)
+    # frequency = re.match('[A-G][#b]?(?P<freq>[0-9]+)', file)
+    # if frequency:
+    #     frequency = frequency.groupdict()['freq']
+    #     return int(frequency)
 
     frequency = re.match('[0-9]+', file)
     if frequency:

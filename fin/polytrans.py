@@ -176,6 +176,7 @@ window_rate = sample_rate / window_size # samples/second / samples/window = wind
 
 if args.by=='fft':
     X = zeros((T,d))
+    title = 'FFT y=%s A=%s' % (basname(args.file), basename(args.base))
     for t,x in enumerate(fft_infer(Y)):
         print '%d/%d' % (t+1,T)
         X[t] = x
@@ -186,25 +187,25 @@ if args.by=='fft':
 if args.by=='nmf':
     X = zeros((T,d))
     iters = 50
+    title = 'NMF euclid y=%s A=%s iters=%d' % (basname(args.file), basename(args.base), iters)
     for t in range(T):
         X[t] = nmf(A,Y[t], iters=10)
-        viz(X.T, notes, save=0, delay=0, title='NMF euclidean file=%s base=%s iters=%d' % (args.file, args.base, iters))
-    viz(X.T, notes, save=1, title='NMF euclidean file=%s base=%s iters=%d' % (args.file, args.base, iters))
+        viz(X.T, notes, save=0, delay=0, title=title)
+    viz(X.T, notes, save=1, title=title)
     exit()
 
 
-print 'T =', T
 bef()
 def X0(): return [0]*d
 X = zeros((T,d), dtype=bool)
-for t,x in enumerate(particle_filter(Y, X0, sample, weigh, L=args.L)):
+for t,x in enumerate(particle_filter(Y[:40], X0, sample, weigh, L=args.L)):
     X[t] = x
     if t % (2*window_rate) < 1: # about every second (nb. window_rate is not an int)
         clf()
         viz(X.T, notes, sample_rate, window_size, save=0, title='', delay=0)
-print 'runtime = %d' % aft()
+print 'runtime = %ds' % aft()
 
 clf()
-viz(X.T, notes, sample_rate, window_size, save=1,
-   title='polytrans %s %s L=%d (p00, p11)=(%s, %s)' % (args.file, args.base, p00, p11, args.L))
+title = 'polytrans y=%s A=%s L=%d (p00, p11)=(%s, %s)' % (basename(args.file), basename(args.base), args.L, p00, p11)
+viz(X.T, notes, sample_rate, window_size, save=1, title=title)
 
