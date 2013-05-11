@@ -144,7 +144,7 @@ def fft_wav(file, window_size=2**12, truncate=None):
     >>> window_size = 2**12
     >>> T,_ = Y.shape
     >>> for t in range(T):
-    >>>     if (t % (2*int(sample_rate/window_size) / plots_per_second)):
+    >>>     if (t % (2*int(sample_rate/window_size) / plots_per_second)) == 0:
     >>>         clf()
     >>>         axis((10,window_size/2, int(Y.min()),int(Y.max())))
     >>>         xscale('log')
@@ -193,8 +193,8 @@ def basis(dir, truncate=44100*5, window_size=2**12):
     data.sort(key=file2freq)
     n = len(data)
     A = zeros((n, window_size/2)) # : note => spectrum
-    freqs = {     file2freq(file)  : i for i,file in enumerate(data)}
-    notes = [note(file2freq(file))     for i,file in enumerate(data)]
+    freqs = {     file2freq(file)  : i for i,file in enumerate(data)} # 
+    notes = [note(file2freq(file))     for i,file in enumerate(data)] # for order
     sr = nans(n) # sample rate
 
     for i,file in enumerate(data):
@@ -262,3 +262,17 @@ def info(A):
     print 'dtype =', A.dtype
     print 'min, max = %s, %s' % (A.min(), A.max())
 
+
+def series(file, plots_per_second = 5, threshold = 0.01, window_size = 2**12):
+    Y,sample_rate = fft_wav(file, window_size = window_size)
+    threshold = Y.max() * threshold
+    T,_ = Y.shape
+    for t in range(T):
+        if (t % (2 * int(sample_rate/window_size) / plots_per_second)) == 0:
+            print '-- %d / %d --' % (t+1, T)
+            clf()
+            axis((10,window_size/2, int(Y.min()),int(Y.max())))
+            xscale('log')
+            plot(Y[t]*(Y[t]>threshold) + threshold*(Y[t]<threshold))
+            #axhline(threshold)
+            draw(); time.sleep(1/plots_per_second)

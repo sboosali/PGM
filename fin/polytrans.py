@@ -148,7 +148,7 @@ def sample(y, L, ymin=1e4, ymax=+inf):
     uniq([note(i * (sample_rate / window_size))  for i in y.argsort().tolist()[::-1] if y[i]>0])
 
     runtimes (d=44)
-    ./polytrans.py y/chord.wav base/octave/
+    ./polytrans.py y/chord.wav A/octave/
     T(L=1)      = 0.30s
     T(L=10)     = 0.30s
     T(L=100)    = 0.30s
@@ -176,7 +176,7 @@ window_rate = sample_rate / window_size # samples/second / samples/window = wind
 
 if args.by=='fft':
     X = zeros((T,d))
-    title = 'FFT y=%s A=%s' % (basname(args.file), basename(args.base))
+    title = 'FFT y=%s A=%s' % (basename(args.file), basename(args.base))
     for t,x in enumerate(fft_infer(Y)):
         print '%d/%d' % (t+1,T)
         X[t] = x
@@ -185,13 +185,19 @@ if args.by=='fft':
 
 
 if args.by=='nmf':
-    X = zeros((T,d))
+
+    # title = 'NMF euclid y=%s A=%s (online)' % (basename(args.file), basename(args.base))
+    # X = zeros((T,d))
+    # for t in range(T):
+    #     X[t] = nmf(A,Y[t], iters=10)
+    #     viz(X.T, notes, save=0, delay=0, title=title)
+    # viz(X.T, notes, save=1, title=title)
+
     iters = 50
-    title = 'NMF euclid y=%s A=%s iters=%d' % (basname(args.file), basename(args.base), iters)
-    for t in range(T):
-        X[t] = nmf(A,Y[t], iters=10)
-        viz(X.T, notes, save=0, delay=0, title=title)
-    viz(X.T, notes, save=1, title=title)
+    title = 'NMF euclid y=%s A=%s iters=%d (global)' % (basename(args.file), basename(args.base), iters)
+    X = nmf(A,Y, iters=iters)
+    viz(X, notes, save=1, title=title)
+
     exit()
 
 
@@ -209,3 +215,9 @@ clf()
 title = 'polytrans y=%s A=%s L=%d (p00, p11)=(%s, %s)' % (basename(args.file), basename(args.base), args.L, p00, p11)
 viz(X.T, notes, sample_rate, window_size, save=1, title=title)
 
+
+""" TODO
+def poi(x,mu): return pdfs.poisson.pmf(x,mu)
+
+
+"""
