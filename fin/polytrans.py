@@ -61,7 +61,7 @@ def particle_filter(Y, X0, sample, weigh, L=100):
         # sample
         particles = sample(y, L, ymin=0, ymax=ymax)
 
-        weights = a([weigh(Xs[l], particles[l]) for l in range(L)])
+        weights = weigh(Xs, particles)
         weights /= sum(weights)
 
         # resample
@@ -79,7 +79,7 @@ def fft_infer(Y):
                   for n,fs in groupby(sorted(_freqs),key=note)} # group freqs by note
         yield a([_notes.get(notes[j],0) for j in range(d)])
 
-def nmf(A, B, iters=50):
+def nmf(A, B, iters=50, verbose=True):
     """
     jointly solve AX=B for X where X>=0
     multiplicative update with euclidean distance
@@ -94,7 +94,7 @@ def nmf(A, B, iters=50):
     X = (1/d) * ones((d, T))
 
     for i in range(iters):
-        print '%d/%d' % (i+1,iters)
+        if verbose: print '%d/%d' % (i+1,iters)
         X = X * mul( A.T, B ) / mul( A.T, A, X )
 
     assert all(X>=0)
@@ -123,16 +123,17 @@ A,freqs,notes,sample_rate = basis(args.base, truncate=44100*5, window_size=windo
 var = [0,1]
 d,_ = A.shape
 
+def poi(x,mu): return pdfs.poisson.pmf(x,mu)
 #TODO data-driven
-p00 = 0.05 # P(silence sticks)
-p11 = 0.999 # P(sound sticks)
+p00 = 0.01 # P(silence sticks)
+p11 = 0.9999 # P(sound sticks)
 transition = a([[p00, 1-p00],
                 [1-p11, p11]])
-def weigh(prevs, currs):
-    #TODO vectorize
-    return product([transition[prev,curr] for prev,curr in zip(prevs,currs)])
+def weigh(Xs, particles):
+    return a([poi(sum(X),1) * product([transition[prev,curr] for prev,curr in zip(X, particle)])
+              for X,particle in zip(Xs,particles)])
 
-def sample(y, L, ymin=1e4, ymax=+inf):
+def sample(y, L, ymin=None, ymax=None):
     """
     : audio => note
 
@@ -144,26 +145,13 @@ def sample(y, L, ymin=1e4, ymax=+inf):
     fft is wrt cycles / samples/window  but  freqs are wrt cycles / second
     (cycles / samples/window) * (1 / windows/second) * (samples / seconds) = cycles / second = Hz
 
-    highest-amplitude freqencies
-    uniq([note(i * (sample_rate / window_size))  for i in y.argsort().tolist()[::-1] if y[i]>0])
-
-    runtimes (d=44)
-    ./polytrans.py y/chord.wav A/octave/
-    T(L=1)      = 0.30s
-    T(L=10)     = 0.30s
-    T(L=100)    = 0.30s
-    T(L=1000)   = 0.35s
-    T(L=10000)  = 1.75s
-
     """
-    p = len(y)
+    if not ymin: ymin = y.min()
+    if not ymax: ymax = y.max()
 
-    _freqs = {i*window_rate : y[i] for i in range(p) if y[i]>ymin} # y[fft basis] => y[freq basis]
-    _notes = {n : max(_freqs[f] for f in fs) / ymax # max ampl of freqs near note
-              for n,fs in groupby(sorted(_freqs),key=note)} # group freqs by note
-
-    return a([[ber(_notes.get(notes[j],0)) for j in range(d)] for _ in range(L)])
-
+    x = nmf(A, y/ymax, iters=50, verbose=False)
+    return a([[ber(x[j]) for j in range(d)]
+              for _ in range(L)])
 
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -186,25 +174,25 @@ if args.by=='fft':
 
 if args.by=='nmf':
 
-    # title = 'NMF euclid y=%s A=%s (online)' % (basename(args.file), basename(args.base))
-    # X = zeros((T,d))
-    # for t in range(T):
-    #     X[t] = nmf(A,Y[t], iters=10)
-    #     viz(X.T, notes, save=0, delay=0, title=title)
-    # viz(X.T, notes, save=1, title=title)
+    title = 'NMF euclid y=%s A=%s (online)' % (basename(args.file), basename(args.base))
+    X = zeros((T,d))
+    for t in range(T):
+        X[t] = nmf(A,Y[t], iters=10)
+        viz(X.T, notes, save=0, delay=0, title=title)
+    viz(X.T, notes, save=1, title=title)
 
-    iters = 50
-    title = 'NMF euclid y=%s A=%s iters=%d (global)' % (basename(args.file), basename(args.base), iters)
-    X = nmf(A,Y, iters=iters)
-    viz(X, notes, save=1, title=title)
+    # iters = 50
+    # title = 'NMF euclid y=%s A=%s iters=%d (global)' % (basename(args.file), basename(args.base), iters)
+    # X = nmf(A,Y, iters=iters)
+    # viz(X, notes, save=1, title=title)
 
     exit()
 
 
-bef()
 def X0(): return [0]*d
 X = zeros((T,d), dtype=bool)
-for t,x in enumerate(particle_filter(Y[:40], X0, sample, weigh, L=args.L)):
+bef()
+for t,x in enumerate(particle_filter(Y, X0, sample, weigh, L=args.L)):
     X[t] = x
     if t % (2*window_rate) < 1: # about every second (nb. window_rate is not an int)
         clf()
@@ -217,7 +205,7 @@ viz(X.T, notes, sample_rate, window_size, save=1, title=title)
 
 
 """ TODO
-def poi(x,mu): return pdfs.poisson.pmf(x,mu)
+
 
 
 """
