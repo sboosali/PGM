@@ -9,12 +9,13 @@ import argparse
 import time
 from itertools import groupby
 
+from sam import sam
 from util import *
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
 # Infer
 
-def particle_filter(Y, X0, sample, weigh, L=100):
+def particle_filter(Y, X0, sample, weigh, L=100, K=3, gamma=1):
     """
     a simple bootstrap particle filter approximately solves any state space model
     samples from likelihood and weighs by transition
@@ -26,32 +27,39 @@ def particle_filter(Y, X0, sample, weigh, L=100):
     weights <== weigh _ _
     resample from multinomial(particles, weights)
 
-    Y , data : stream
+    K=1 and gamma=1 recovers old model
 
-    X0
+    input Y , data : stream
+
+    input X0
     can sample
     : => X
 
-    sample
+    input sample
     eg p(y[t] | x[t])
     can sample
     : _ => _
 
-    weigh
+    input weigh
     eg p(x[t] | x[t-1])
     can eval
     : _, _ => [0,1]
 
-    L = |particles|
+    input L = |particles|
+
+    input K = |markov order|
+
+    input gamma = discounting for higher-order markov chain
 
     output X
     T lists of L particles with d dimensions
     X[t,l,d]
+
     """
     print '--- Particle Filter (L=%d) ---' % L
 
-    Xs = a([X0() for _ in range(L)])
-    L,d = Xs.shape
+    XXX = [a([X0() for _ in range(L)])] # : (_,L,D)
+    d = len(X0())
     ymax = 1e6
 
     for t,y in enumerate(Y):
@@ -61,14 +69,15 @@ def particle_filter(Y, X0, sample, weigh, L=100):
         # sample
         particles = sample(y, L, ymin=0, ymax=ymax)
 
-        weights = weigh(Xs, particles)
+        weights = weigh(reversed(XXX[:-(K+1):-1]), particles, gamma=gamma)
         weights /= sum(weights)
 
         # resample
-        Xs = a([multinomial(particles, weights) for _ in range(L)])
+        XX = a([multinomial(particles, weights) for _ in range(L)])
+        XXX.append(XX)
 
         # infer
-        X = [max(var, key=lambda val: sum(val==Xs[:,_])) for _ in range(d)]
+        X = [max(var, key=lambda val: sum(val==XX[:,_])) for _ in range(d)]
         yield X
 
 
@@ -109,6 +118,10 @@ cmd.add_argument('file', help='a .wav audio file, the input to transcribe')
 cmd.add_argument('base', help='a dir of .wav audio files, defines what notes are')
 cmd.add_argument('-L', type=int, default=100,
                  help='the number of particles in the particle filter')
+cmd.add_argument('-K', type=int, default=1,
+                 help='the order of the markov chain (in windows)')
+cmd.add_argument('-gamma', type=float, default=1,
+                 help='the discount factor for values of past states (when K>1)')
 inference_algorithms = ['pf', 'fft', 'nmf']
 cmd.add_argument('-by', 
                  type=lambda x: x if x in inference_algorithms else None, default='pf',
@@ -126,12 +139,21 @@ d,_ = A.shape
 def poi(x,mu): return pdfs.poisson.pmf(x,mu)
 #TODO data-driven
 p00 = 0.01 # P(silence sticks)
-p11 = 0.9999 # P(sound sticks)
+p11 = 0.999 # P(sound sticks)
 transition = a([[p00, 1-p00],
                 [1-p11, p11]])
-def weigh(Xs, particles):
-    return a([poi(sum(X),1) * product([transition[prev,curr] for prev,curr in zip(X, particle)])
-              for X,particle in zip(Xs,particles)])
+def weigh(XXX, particles, gamma=0.9):
+    """
+    XXX : (K,L,D)
+    XXX[0] ~ X[t-1]
+    XXX[K-1] ~ X[t-K]
+    particles : (L,D)
+    """
+    #TODO check {gamma^k ..} is not backwards
+    W = a([ sum( gamma**(k+1) * poi(sum(X),1) * product([transition[prev,curr] for (prev, curr) in zip(XX[l], particle)])
+                 for (k, XX) in enumerate(XXX))
+            for (l, particle) in enumerate(particles)])
+    return W
 
 def sample(y, L, ymin=None, ymax=None):
     """
@@ -152,7 +174,6 @@ def sample(y, L, ymin=None, ymax=None):
     x = nmf(A, y/ymax, iters=50, verbose=False)
     return a([[ber(x[j]) for j in range(d)]
               for _ in range(L)])
-
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # Main
@@ -192,15 +213,16 @@ if args.by=='nmf':
 def X0(): return [0]*d
 X = zeros((T,d), dtype=bool)
 bef()
-for t,x in enumerate(particle_filter(Y, X0, sample, weigh, L=args.L)):
+for t,x in enumerate(particle_filter(Y, X0, sample, weigh, L=args.L, K=args.K, gamma=args.gamma)):
     X[t] = x
-    if t % (2*window_rate) < 1: # about every second (nb. window_rate is not an int)
+    if (t+1) % (2*window_rate) < 1: # about every second (nb. window_rate is not an int)
         clf()
         viz(X.T, notes, sample_rate, window_size, save=0, title='', delay=0)
 print 'runtime = %ds' % aft()
 
 clf()
-title = 'polytrans y=%s A=%s L=%d (p00, p11)=(%s, %s)' % (basename(args.file), basename(args.base), args.L, p00, p11)
+title = 'polytrans y=%s A=%s L=%d K=%d gamma=%s (p00, p11)=(%s, %s)' % (
+    basename(args.file), basename(args.base), args.L, args.K, args.gamma, p00, p11)
 viz(X.T, notes, sample_rate, window_size, save=1, title=title)
 
 
